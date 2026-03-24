@@ -1,34 +1,112 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
-}
+/* App.css - Black Star Threads */
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
-
-.App-header {
-    background-color: #0f0f10;
+.App {
     min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
 }
 
-.App-link {
-    color: #61dafb;
+/* Animation utilities */
+.animate-fade-up {
+    opacity: 0;
+    animation: fade-up 0.6s ease-out forwards;
 }
 
-@keyframes App-logo-spin {
+@keyframes fade-up {
     from {
-        transform: rotate(0deg);
+        opacity: 0;
+        transform: translateY(20px);
     }
     to {
-        transform: rotate(360deg);
+        opacity: 1;
+        transform: translateY(0);
     }
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Custom button styles */
+.btn-primary {
+    @apply bg-black text-white hover:bg-ashanti-gold hover:text-black transition-all duration-300 uppercase tracking-widest text-xs py-4 px-8 border border-black;
+}
+
+.btn-secondary {
+    @apply bg-transparent text-black border border-black hover:bg-black hover:text-white transition-all duration-300 uppercase tracking-widest text-xs py-4 px-8;
+}
+
+/* Product card hover effect */
+.product-card {
+    @apply border border-transparent hover:border-black transition-all duration-300 group relative overflow-hidden;
+}
+
+/* Sharp shadow effect */
+.sharp-shadow {
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1);
+}
+
+.sharp-shadow-sm {
+    box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 1);
+}
+
+/* Glass header effect */
+.glass-header {
+    backdrop-filter: blur(12px);
+    background-color: rgba(255, 255, 255, 0.8);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Grayscale hover effect for images */
+.grayscale-hover {
+    filter: grayscale(30%);
+    transition: filter 0.3s ease;
+}
+
+.grayscale-hover:hover {
+    filter: grayscale(0%);
+}
+
+/* Input styles */
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: #000000;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #F9F9F7;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #000000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #D4AF37;
+}
+
+/* Hide scrollbar for marquee */
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
