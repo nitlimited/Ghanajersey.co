@@ -27,7 +27,7 @@ const CartPage = () => {
       <Header />
 
       <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
-        <h1 className="font-cinzel text-2xl md:text-3xl tracking-widest uppercase mb-12" data-testid="cart-title">
+        <h1 className="font-heading text-2xl md:text-3xl tracking-widest uppercase mb-12" data-testid="cart-title">
           Shopping Cart
         </h1>
 
@@ -59,10 +59,10 @@ const CartPage = () => {
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <div>
-                        <Link to={`/products/${item.product_id}`} className="font-cinzel text-lg tracking-wide uppercase hover:text-ashanti-gold transition-colors">
+                        <Link to={`/products/${item.product_id}`} className="font-heading text-lg tracking-wide uppercase hover:text-ashanti-gold transition-colors">
                           {item.name}
                         </Link>
-                        <p className="font-outfit text-sm text-muted-text mt-1">Size: {item.size}</p>
+                        <p className="font-body text-sm text-muted-text mt-1">Size: {item.size}</p>
                       </div>
                       <button
                         onClick={() => removeFromCart(item.product_id, item.size)}
@@ -82,7 +82,7 @@ const CartPage = () => {
                         >
                           <Minus size={14} />
                         </button>
-                        <span className="w-10 h-10 flex items-center justify-center font-outfit text-sm">
+                        <span className="w-10 h-10 flex items-center justify-center font-body text-sm">
                           {item.quantity}
                         </span>
                         <button
@@ -93,7 +93,7 @@ const CartPage = () => {
                           <Plus size={14} />
                         </button>
                       </div>
-                      <span className="font-outfit text-lg font-medium">
+                      <span className="font-body text-lg font-medium">
                         {item.currency} {(item.price * item.quantity).toFixed(2)}
                       </span>
                     </div>
@@ -105,21 +105,21 @@ const CartPage = () => {
             {/* Order Summary */}
             <div className="lg:col-span-1">
               <div className="bg-white p-8 border border-black/10">
-                <h2 className="font-cinzel text-lg tracking-widest uppercase mb-6">Order Summary</h2>
+                <h2 className="font-heading text-lg tracking-widest uppercase mb-6">Order Summary</h2>
                 
                 <div className="space-y-4 mb-6">
-                  <div className="flex justify-between font-outfit text-sm">
+                  <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
                     <span>USD {cart.total.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between font-outfit text-sm">
+                  <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping</span>
                     <span className="text-muted-text">Calculated at checkout</span>
                   </div>
                 </div>
 
                 <div className="border-t border-black/10 pt-4 mb-6">
-                  <div className="flex justify-between font-outfit">
+                  <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
                     <span className="text-xl font-medium" data-testid="cart-total">USD {cart.total.toFixed(2)}</span>
                   </div>
@@ -127,13 +127,13 @@ const CartPage = () => {
 
                 <Button
                   onClick={handleCheckout}
-                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-outfit uppercase tracking-widest"
+                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                   data-testid="checkout-btn"
                 >
                   Proceed to Checkout
                 </Button>
 
-                <Link to="/products" className="block text-center mt-4 font-outfit text-sm text-muted-text hover:text-black">
+                <Link to="/products" className="block text-center mt-4 font-body text-sm text-muted-text hover:text-black">
                   Continue Shopping
                 </Link>
               </div>
@@ -142,10 +142,10 @@ const CartPage = () => {
         ) : (
           <div className="text-center py-20">
             <ShoppingBag size={64} className="mx-auto text-muted-text mb-6" />
-            <h2 className="font-cinzel text-xl tracking-widest uppercase mb-4">Your cart is empty</h2>
-            <p className="font-outfit text-muted-text mb-8">Looks like you haven't added any items yet</p>
+            <h2 className="font-heading text-xl tracking-widest uppercase mb-4">Your cart is empty</h2>
+            <p className="font-body text-muted-text mb-8">Looks like you haven't added any items yet</p>
             <Link to="/products">
-              <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-10 py-6 font-outfit uppercase tracking-widest">
+              <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-10 py-6 font-body uppercase tracking-widest">
                 Start Shopping
               </Button>
             </Link>

@@ -74,7 +74,7 @@ const OrderSuccessPage = () => {
         <div className="pt-32 flex items-center justify-center">
           <div className="animate-pulse text-center">
             <div className="w-16 h-16 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto"></div>
-            <p className="font-outfit mt-4">Verifying payment...</p>
+            <p className="font-body mt-4">Verifying payment...</p>
           </div>
         </div>
       </div>
@@ -91,10 +91,10 @@ const OrderSuccessPage = () => {
             <CheckCircle size={48} className="text-ghana-green" />
           </div>
 
-          <h1 className="font-cinzel text-2xl md:text-3xl tracking-widest uppercase mb-4" data-testid="success-title">
+          <h1 className="font-heading text-2xl md:text-3xl tracking-widest uppercase mb-4" data-testid="success-title">
             Order Confirmed
           </h1>
-          <p className="font-outfit text-muted-text mb-8">
+          <p className="font-body text-muted-text mb-8">
             Thank you for your purchase! Your order has been received and is being processed.
           </p>
 
@@ -102,9 +102,9 @@ const OrderSuccessPage = () => {
             <div className="bg-bone-white p-6 mb-8 text-left">
               <div className="flex items-center gap-3 mb-4">
                 <Package size={24} />
-                <span className="font-cinzel tracking-widest uppercase">Order Details</span>
+                <span className="font-heading tracking-widest uppercase">Order Details</span>
               </div>
-              <div className="space-y-2 font-outfit text-sm">
+              <div className="space-y-2 font-body text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-text">Order ID</span>
                   <span className="font-mono">{order.order_id}</span>
@@ -129,19 +129,19 @@ const OrderSuccessPage = () => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/dashboard">
-              <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-8 py-6 font-outfit uppercase tracking-widest" data-testid="view-orders-btn">
+              <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-8 py-6 font-body uppercase tracking-widest" data-testid="view-orders-btn">
                 View My Orders
               </Button>
             </Link>
             <Link to="/products">
-              <Button variant="outline" className="border-black px-8 py-6 font-outfit uppercase tracking-widest" data-testid="continue-shopping-btn">
+              <Button variant="outline" className="border-black px-8 py-6 font-body uppercase tracking-widest" data-testid="continue-shopping-btn">
                 Continue Shopping <ArrowRight size={16} className="ml-2" />
               </Button>
             </Link>
           </div>
         </div>
 
-        <p className="font-outfit text-sm text-muted-text mt-8">
+        <p className="font-body text-sm text-muted-text mt-8">
           A confirmation email has been sent to your email address.
         </p>
       </div>

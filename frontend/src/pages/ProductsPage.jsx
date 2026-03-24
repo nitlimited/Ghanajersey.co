@@ -76,10 +76,10 @@ const ProductsPage = () => {
       {/* Page Header */}
       <div className="pt-32 pb-12 px-6 md:px-12 bg-black text-white">
         <div className="max-w-7xl mx-auto">
-          <h1 className="font-cinzel text-3xl md:text-4xl tracking-widest uppercase" data-testid="page-title">
+          <h1 className="font-heading text-3xl md:text-4xl tracking-widest uppercase" data-testid="page-title">
             {selectedCategory ? categories.find(c => c.id === selectedCategory)?.name || "Shop" : "All Jerseys"}
           </h1>
-          <p className="font-outfit text-sm text-white/60 mt-2">
+          <p className="font-body text-sm text-white/60 mt-2">
             {products.length} products
           </p>
         </div>
@@ -144,24 +144,24 @@ const ProductsPage = () => {
           <aside className={`${showFilters ? 'block' : 'hidden'} md:block w-full md:w-64 flex-shrink-0`}>
             {/* Search */}
             <div className="mb-8">
-              <h3 className="font-cinzel text-sm tracking-widest uppercase mb-4">Search</h3>
+              <h3 className="font-heading text-sm tracking-widest uppercase mb-4">Search</h3>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search jerseys..."
-                className="w-full border-b border-black/20 bg-transparent py-3 font-outfit text-sm focus:border-black outline-none"
+                className="w-full border-b border-black/20 bg-transparent py-3 font-body text-sm focus:border-black outline-none"
                 data-testid="search-input"
               />
             </div>
 
             {/* Categories */}
             <div className="mb-8">
-              <h3 className="font-cinzel text-sm tracking-widest uppercase mb-4">Categories</h3>
+              <h3 className="font-heading text-sm tracking-widest uppercase mb-4">Categories</h3>
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => setSelectedCategory("")}
-                  className={`text-left font-outfit text-sm py-2 transition-colors ${!selectedCategory ? 'text-black font-medium' : 'text-muted-text hover:text-black'}`}
+                  className={`text-left font-body text-sm py-2 transition-colors ${!selectedCategory ? 'text-black font-medium' : 'text-muted-text hover:text-black'}`}
                   data-testid="category-all"
                 >
                   All Categories
@@ -170,7 +170,7 @@ const ProductsPage = () => {
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
-                    className={`text-left font-outfit text-sm py-2 transition-colors ${selectedCategory === category.id ? 'text-black font-medium' : 'text-muted-text hover:text-black'}`}
+                    className={`text-left font-body text-sm py-2 transition-colors ${selectedCategory === category.id ? 'text-black font-medium' : 'text-muted-text hover:text-black'}`}
                     data-testid={`category-filter-${category.id}`}
                   >
                     {category.name}
@@ -181,7 +181,7 @@ const ProductsPage = () => {
 
             {/* Price Range */}
             <div className="mb-8">
-              <h3 className="font-cinzel text-sm tracking-widest uppercase mb-4">Price Range</h3>
+              <h3 className="font-heading text-sm tracking-widest uppercase mb-4">Price Range</h3>
               <Slider
                 value={priceRange}
                 onValueChange={setPriceRange}
@@ -191,7 +191,7 @@ const ProductsPage = () => {
                 className="mb-4"
                 data-testid="price-slider"
               />
-              <div className="flex justify-between font-outfit text-sm text-muted-text">
+              <div className="flex justify-between font-body text-sm text-muted-text">
                 <span>${priceRange[0]}</span>
                 <span>${priceRange[1]}</span>
               </div>
@@ -238,14 +238,14 @@ const ProductsPage = () => {
                         />
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-cinzel text-lg tracking-wide uppercase">{product.name}</h3>
-                        <p className="font-outfit text-sm text-muted-text mt-2 line-clamp-2">{product.description}</p>
+                        <h3 className="font-heading text-lg tracking-wide uppercase">{product.name}</h3>
+                        <p className="font-body text-sm text-muted-text mt-2 line-clamp-2">{product.description}</p>
                         <div className="flex items-center gap-4 mt-4">
-                          <span className="font-outfit text-lg font-medium">{product.currency} {product.price.toFixed(2)}</span>
+                          <span className="font-body text-lg font-medium">{product.currency} {product.price.toFixed(2)}</span>
                           {product.rating > 0 && (
                             <div className="flex items-center gap-1">
                               <Star size={14} fill="#D4AF37" className="text-ashanti-gold" />
-                              <span className="font-outfit text-sm text-muted-text">{product.rating}</span>
+                              <span className="font-body text-sm text-muted-text">{product.rating}</span>
                             </div>
                           )}
                         </div>
@@ -256,7 +256,7 @@ const ProductsPage = () => {
               </div>
             ) : (
               <div className="text-center py-20">
-                <p className="font-outfit text-lg text-muted-text mb-4">No products found</p>
+                <p className="font-body text-lg text-muted-text mb-4">No products found</p>
                 <Button variant="outline" onClick={clearFilters} className="border-black">
                   Clear Filters
                 </Button>

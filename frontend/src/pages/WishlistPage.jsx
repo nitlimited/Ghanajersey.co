@@ -61,7 +61,7 @@ const WishlistPage = () => {
         <Header />
         <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto text-center py-20">
           <Heart size={64} className="mx-auto text-muted-text mb-6" />
-          <h1 className="font-cinzel text-2xl tracking-widest uppercase mb-4">Sign in to view wishlist</h1>
+          <h1 className="font-heading text-2xl tracking-widest uppercase mb-4">Sign in to view wishlist</h1>
           <Link to="/auth">
             <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-10 py-6">
               Sign In
@@ -78,7 +78,7 @@ const WishlistPage = () => {
       <Header />
 
       <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
-        <h1 className="font-cinzel text-2xl md:text-3xl tracking-widest uppercase mb-12" data-testid="wishlist-title">
+        <h1 className="font-heading text-2xl md:text-3xl tracking-widest uppercase mb-12" data-testid="wishlist-title">
           My Wishlist
         </h1>
 
@@ -107,11 +107,11 @@ const WishlistPage = () => {
                 </Link>
                 <div className="mt-4">
                   <Link to={`/products/${product.product_id}`}>
-                    <h3 className="font-cinzel text-sm tracking-wide uppercase group-hover:text-ashanti-gold transition-colors">
+                    <h3 className="font-heading text-sm tracking-wide uppercase group-hover:text-ashanti-gold transition-colors">
                       {product.name}
                     </h3>
                   </Link>
-                  <span className="font-outfit text-lg block mt-1">{product.currency} {product.price?.toFixed(2)}</span>
+                  <span className="font-body text-lg block mt-1">{product.currency} {product.price?.toFixed(2)}</span>
                   
                   <div className="flex gap-2 mt-4">
                     <Button
@@ -137,10 +137,10 @@ const WishlistPage = () => {
         ) : (
           <div className="text-center py-20">
             <Heart size={64} className="mx-auto text-muted-text mb-6" />
-            <h2 className="font-cinzel text-xl tracking-widest uppercase mb-4">Your wishlist is empty</h2>
-            <p className="font-outfit text-muted-text mb-8">Save your favorite items for later</p>
+            <h2 className="font-heading text-xl tracking-widest uppercase mb-4">Your wishlist is empty</h2>
+            <p className="font-body text-muted-text mb-8">Save your favorite items for later</p>
             <Link to="/products">
-              <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-10 py-6 font-outfit uppercase tracking-widest">
+              <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-10 py-6 font-body uppercase tracking-widest">
                 Explore Products
               </Button>
             </Link>

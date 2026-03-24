@@ -103,8 +103,8 @@ const AuthPage = () => {
                 className="w-16 h-16 invert opacity-90"
               />
             </div>
-            <h2 className="font-cinzel text-3xl tracking-widest uppercase mb-4">Black Star Threads</h2>
-            <p className="font-outfit text-white/70">Heritage Woven with Modern Craftsmanship</p>
+            <h2 className="font-heading text-3xl tracking-widest uppercase mb-4">Black Star Threads</h2>
+            <p className="font-body text-white/70">Heritage Woven with Modern Craftsmanship</p>
           </div>
         </div>
       </div>
@@ -120,7 +120,7 @@ const AuthPage = () => {
                 alt="Black Star" 
                 className="w-8 h-8"
               />
-              <span className="font-cinzel text-lg tracking-widest uppercase">Black Star Threads</span>
+              <span className="font-heading text-lg tracking-widest uppercase">Black Star Threads</span>
             </Link>
           </div>
 
@@ -128,14 +128,14 @@ const AuthPage = () => {
             <TabsList className="grid w-full grid-cols-2 bg-transparent border-b border-black/10 rounded-none h-auto p-0">
               <TabsTrigger 
                 value="login" 
-                className="font-outfit text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4"
+                className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4"
                 data-testid="tab-login"
               >
                 Sign In
               </TabsTrigger>
               <TabsTrigger 
                 value="register" 
-                className="font-outfit text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4"
+                className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4"
                 data-testid="tab-register"
               >
                 Register
@@ -146,7 +146,7 @@ const AuthPage = () => {
             <TabsContent value="login" className="mt-8">
               <form onSubmit={handleLogin} className="space-y-6">
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Email</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Email</Label>
                   <div className="relative mt-2">
                     <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
                     <Input
@@ -161,7 +161,7 @@ const AuthPage = () => {
                 </div>
 
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Password</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
                   <div className="relative mt-2">
                     <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
                     <Input
@@ -185,7 +185,7 @@ const AuthPage = () => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-outfit uppercase tracking-widest"
+                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                   data-testid="login-submit"
                 >
                   {loading ? "Signing in..." : "Sign In"}
@@ -197,7 +197,7 @@ const AuthPage = () => {
                   <div className="w-full border-t border-black/10"></div>
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-bone-white px-4 font-outfit text-sm text-muted-text">or continue with</span>
+                  <span className="bg-bone-white px-4 font-body text-sm text-muted-text">or continue with</span>
                 </div>
               </div>
 
@@ -205,7 +205,7 @@ const AuthPage = () => {
                 type="button"
                 variant="outline"
                 onClick={loginWithGoogle}
-                className="w-full border-black py-6 font-outfit uppercase tracking-widest"
+                className="w-full border-black py-6 font-body uppercase tracking-widest"
                 data-testid="google-login"
               >
                 <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
@@ -222,7 +222,7 @@ const AuthPage = () => {
             <TabsContent value="register" className="mt-8">
               <form onSubmit={handleRegister} className="space-y-6">
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Full Name</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Full Name</Label>
                   <div className="relative mt-2">
                     <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
                     <Input
@@ -237,7 +237,7 @@ const AuthPage = () => {
                 </div>
 
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Email</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Email</Label>
                   <div className="relative mt-2">
                     <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
                     <Input
@@ -252,7 +252,7 @@ const AuthPage = () => {
                 </div>
 
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Password</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
                   <div className="relative mt-2">
                     <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
                     <Input
@@ -274,7 +274,7 @@ const AuthPage = () => {
                 </div>
 
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Account Type</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Account Type</Label>
                   <Select value={registerRole} onValueChange={setRegisterRole}>
                     <SelectTrigger className="mt-2 rounded-none border-black/20 py-6" data-testid="register-role">
                       <SelectValue />
@@ -289,7 +289,7 @@ const AuthPage = () => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-outfit uppercase tracking-widest"
+                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                   data-testid="register-submit"
                 >
                   {loading ? "Creating account..." : "Create Account"}
@@ -301,7 +301,7 @@ const AuthPage = () => {
                   <div className="w-full border-t border-black/10"></div>
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-bone-white px-4 font-outfit text-sm text-muted-text">or continue with</span>
+                  <span className="bg-bone-white px-4 font-body text-sm text-muted-text">or continue with</span>
                 </div>
               </div>
 
@@ -309,7 +309,7 @@ const AuthPage = () => {
                 type="button"
                 variant="outline"
                 onClick={loginWithGoogle}
-                className="w-full border-black py-6 font-outfit uppercase tracking-widest"
+                className="w-full border-black py-6 font-body uppercase tracking-widest"
                 data-testid="google-register"
               >
                 <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
@@ -323,7 +323,7 @@ const AuthPage = () => {
             </TabsContent>
           </Tabs>
 
-          <p className="text-center mt-8 font-outfit text-sm text-muted-text">
+          <p className="text-center mt-8 font-body text-sm text-muted-text">
             By signing up, you agree to our Terms of Service and Privacy Policy.
           </p>
         </div>

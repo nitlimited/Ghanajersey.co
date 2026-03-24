@@ -153,7 +153,7 @@ const CheckoutPage = () => {
       <Header />
 
       <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
-        <h1 className="font-cinzel text-2xl md:text-3xl tracking-widest uppercase mb-12" data-testid="checkout-title">
+        <h1 className="font-heading text-2xl md:text-3xl tracking-widest uppercase mb-12" data-testid="checkout-title">
           Checkout
         </h1>
 
@@ -165,12 +165,12 @@ const CheckoutPage = () => {
               <div className="bg-white p-8 border border-black/10">
                 <div className="flex items-center gap-3 mb-6">
                   <Truck size={24} />
-                  <h2 className="font-cinzel text-lg tracking-widest uppercase">Shipping Address</h2>
+                  <h2 className="font-heading text-lg tracking-widest uppercase">Shipping Address</h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Full Name</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Full Name</Label>
                     <Input
                       name="full_name"
                       value={shippingAddress.full_name}
@@ -180,7 +180,7 @@ const CheckoutPage = () => {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Address Line 1</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Address Line 1</Label>
                     <Input
                       name="address_line1"
                       value={shippingAddress.address_line1}
@@ -190,7 +190,7 @@ const CheckoutPage = () => {
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Address Line 2 (Optional)</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Address Line 2 (Optional)</Label>
                     <Input
                       name="address_line2"
                       value={shippingAddress.address_line2}
@@ -200,7 +200,7 @@ const CheckoutPage = () => {
                     />
                   </div>
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">City</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">City</Label>
                     <Input
                       name="city"
                       value={shippingAddress.city}
@@ -210,7 +210,7 @@ const CheckoutPage = () => {
                     />
                   </div>
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">State/Region</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">State/Region</Label>
                     <Input
                       name="state"
                       value={shippingAddress.state}
@@ -220,7 +220,7 @@ const CheckoutPage = () => {
                     />
                   </div>
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Postal Code</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Postal Code</Label>
                     <Input
                       name="postal_code"
                       value={shippingAddress.postal_code}
@@ -230,7 +230,7 @@ const CheckoutPage = () => {
                     />
                   </div>
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Country</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Country</Label>
                     <Select value={shippingAddress.country} onValueChange={(value) => setShippingAddress(prev => ({ ...prev, country: value }))}>
                       <SelectTrigger className="mt-2 rounded-none border-black/20" data-testid="select-country">
                         <SelectValue />
@@ -243,7 +243,7 @@ const CheckoutPage = () => {
                     </Select>
                   </div>
                   <div className="md:col-span-2">
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Phone Number</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Phone Number</Label>
                     <Input
                       name="phone"
                       value={shippingAddress.phone}
@@ -259,38 +259,38 @@ const CheckoutPage = () => {
               <div className="bg-white p-8 border border-black/10">
                 <div className="flex items-center gap-3 mb-6">
                   <CreditCard size={24} />
-                  <h2 className="font-cinzel text-lg tracking-widest uppercase">Payment Method</h2>
+                  <h2 className="font-heading text-lg tracking-widest uppercase">Payment Method</h2>
                 </div>
 
                 <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-4">
                   <div className="flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors">
                     <RadioGroupItem value="stripe" id="stripe" data-testid="payment-stripe" />
                     <Label htmlFor="stripe" className="flex-1 cursor-pointer">
-                      <span className="font-outfit font-medium">Credit/Debit Card</span>
-                      <span className="font-outfit text-sm text-muted-text block">Secure payment via Stripe</span>
+                      <span className="font-body font-medium">Credit/Debit Card</span>
+                      <span className="font-body text-sm text-muted-text block">Secure payment via Stripe</span>
                     </Label>
                     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/200px-Stripe_Logo%2C_revised_2016.svg.png" alt="Stripe" className="h-6" />
                   </div>
                   <div className="flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors">
                     <RadioGroupItem value="paypal" id="paypal" data-testid="payment-paypal" />
                     <Label htmlFor="paypal" className="flex-1 cursor-pointer">
-                      <span className="font-outfit font-medium">PayPal</span>
-                      <span className="font-outfit text-sm text-muted-text block">Pay with your PayPal account</span>
+                      <span className="font-body font-medium">PayPal</span>
+                      <span className="font-body text-sm text-muted-text block">Pay with your PayPal account</span>
                     </Label>
                     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/PayPal.svg/200px-PayPal.svg.png" alt="PayPal" className="h-6" />
                   </div>
                   <div className="flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors">
                     <RadioGroupItem value="paystack" id="paystack" data-testid="payment-paystack" />
                     <Label htmlFor="paystack" className="flex-1 cursor-pointer">
-                      <span className="font-outfit font-medium">Paystack</span>
-                      <span className="font-outfit text-sm text-muted-text block">Pay with mobile money or card (Africa)</span>
+                      <span className="font-body font-medium">Paystack</span>
+                      <span className="font-body text-sm text-muted-text block">Pay with mobile money or card (Africa)</span>
                     </Label>
-                    <div className="bg-green-600 text-white px-2 py-1 text-xs font-outfit rounded">Paystack</div>
+                    <div className="bg-green-600 text-white px-2 py-1 text-xs font-body rounded">Paystack</div>
                   </div>
                 </RadioGroup>
 
                 <div className="mt-6">
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Currency</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Currency</Label>
                   <Select value={currency} onValueChange={setCurrency}>
                     <SelectTrigger className="mt-2 rounded-none border-black/20" data-testid="select-currency">
                       <SelectValue />
@@ -308,7 +308,7 @@ const CheckoutPage = () => {
             {/* Order Summary */}
             <div className="lg:col-span-1">
               <div className="bg-white p-8 border border-black/10 sticky top-32">
-                <h2 className="font-cinzel text-lg tracking-widest uppercase mb-6">Order Summary</h2>
+                <h2 className="font-heading text-lg tracking-widest uppercase mb-6">Order Summary</h2>
 
                 {/* Items */}
                 <div className="space-y-4 mb-6 max-h-64 overflow-y-auto">
@@ -318,27 +318,27 @@ const CheckoutPage = () => {
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-outfit text-sm font-medium line-clamp-1">{item.name}</p>
-                        <p className="font-outfit text-xs text-muted-text">Size: {item.size} × {item.quantity}</p>
-                        <p className="font-outfit text-sm mt-1">{item.currency} {(item.price * item.quantity).toFixed(2)}</p>
+                        <p className="font-body text-sm font-medium line-clamp-1">{item.name}</p>
+                        <p className="font-body text-xs text-muted-text">Size: {item.size} × {item.quantity}</p>
+                        <p className="font-body text-sm mt-1">{item.currency} {(item.price * item.quantity).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
 
                 <div className="border-t border-black/10 pt-4 space-y-3">
-                  <div className="flex justify-between font-outfit text-sm">
+                  <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
                     <span>{currency} {cart.total.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between font-outfit text-sm">
+                  <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping</span>
                     <span>{currency} {shippingCost.toFixed(2)}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-black/10 pt-4 mt-4 mb-6">
-                  <div className="flex justify-between font-outfit">
+                  <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
                     <span className="text-xl font-medium" data-testid="checkout-total">{currency} {total.toFixed(2)}</span>
                   </div>
@@ -347,7 +347,7 @@ const CheckoutPage = () => {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-outfit uppercase tracking-widest"
+                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                   data-testid="place-order-btn"
                 >
                   {loading ? "Processing..." : "Place Order"}
@@ -355,7 +355,7 @@ const CheckoutPage = () => {
 
                 <div className="flex items-center justify-center gap-2 mt-4 text-muted-text">
                   <Shield size={16} />
-                  <span className="font-outfit text-xs">Secure checkout</span>
+                  <span className="font-body text-xs">Secure checkout</span>
                 </div>
               </div>
             </div>

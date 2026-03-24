@@ -172,10 +172,10 @@ const VendorDashboard = () => {
         {/* Welcome */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
           <div>
-            <h1 className="font-cinzel text-2xl md:text-3xl tracking-widest uppercase" data-testid="vendor-title">
+            <h1 className="font-heading text-2xl md:text-3xl tracking-widest uppercase" data-testid="vendor-title">
               Vendor Dashboard
             </h1>
-            <p className="font-outfit text-muted-text mt-2">
+            <p className="font-body text-muted-text mt-2">
               {profile?.vendor_profile?.brand_name || user?.name}
             </p>
           </div>
@@ -191,13 +191,13 @@ const VendorDashboard = () => {
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle className="font-cinzel tracking-widest uppercase">
+                <DialogTitle className="font-heading tracking-widest uppercase">
                   {editingProduct ? "Edit Product" : "Add New Product"}
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmitProduct} className="space-y-6 mt-4">
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Product Name *</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Product Name *</Label>
                   <Input
                     value={productForm.name}
                     onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
@@ -207,7 +207,7 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Description *</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Description *</Label>
                   <Textarea
                     value={productForm.description}
                     onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
@@ -218,7 +218,7 @@ const VendorDashboard = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Price *</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Price *</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -229,7 +229,7 @@ const VendorDashboard = () => {
                     />
                   </div>
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Currency</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Currency</Label>
                     <Select value={productForm.currency} onValueChange={(v) => setProductForm({ ...productForm, currency: v })}>
                       <SelectTrigger className="mt-2 rounded-none">
                         <SelectValue />
@@ -246,7 +246,7 @@ const VendorDashboard = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Category</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Category</Label>
                     <Select value={productForm.category} onValueChange={(v) => setProductForm({ ...productForm, category: v })}>
                       <SelectTrigger className="mt-2 rounded-none">
                         <SelectValue />
@@ -259,7 +259,7 @@ const VendorDashboard = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label className="font-outfit text-sm uppercase tracking-wider">Stock</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Stock</Label>
                     <Input
                       type="number"
                       value={productForm.stock}
@@ -270,7 +270,7 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Sizes</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Sizes</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {sizes.map(size => (
                       <button
@@ -282,7 +282,7 @@ const VendorDashboard = () => {
                             : [...productForm.sizes, size];
                           setProductForm({ ...productForm, sizes: newSizes });
                         }}
-                        className={`w-12 h-10 border font-outfit text-sm ${productForm.sizes.includes(size) ? 'bg-black text-white border-black' : 'border-black/20'}`}
+                        className={`w-12 h-10 border font-body text-sm ${productForm.sizes.includes(size) ? 'bg-black text-white border-black' : 'border-black/20'}`}
                       >
                         {size}
                       </button>
@@ -291,7 +291,7 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <Label className="font-outfit text-sm uppercase tracking-wider">Image URLs</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Image URLs</Label>
                   {productForm.images.map((url, index) => (
                     <div key={index} className="flex gap-2 mt-2">
                       <Input
@@ -341,30 +341,30 @@ const VendorDashboard = () => {
           <div className="bg-white p-6 border border-black/10">
             <div className="flex items-center gap-3 text-muted-text mb-2">
               <Package size={20} />
-              <span className="font-outfit text-xs uppercase tracking-wider">Total Products</span>
+              <span className="font-body text-xs uppercase tracking-wider">Total Products</span>
             </div>
-            <span className="font-outfit text-3xl font-medium">{products.length}</span>
+            <span className="font-body text-3xl font-medium">{products.length}</span>
           </div>
           <div className="bg-white p-6 border border-black/10">
             <div className="flex items-center gap-3 text-muted-text mb-2">
               <CheckCircle size={20} />
-              <span className="font-outfit text-xs uppercase tracking-wider">Approved</span>
+              <span className="font-body text-xs uppercase tracking-wider">Approved</span>
             </div>
-            <span className="font-outfit text-3xl font-medium text-ghana-green">{approvedProducts}</span>
+            <span className="font-body text-3xl font-medium text-ghana-green">{approvedProducts}</span>
           </div>
           <div className="bg-white p-6 border border-black/10">
             <div className="flex items-center gap-3 text-muted-text mb-2">
               <Clock size={20} />
-              <span className="font-outfit text-xs uppercase tracking-wider">Pending</span>
+              <span className="font-body text-xs uppercase tracking-wider">Pending</span>
             </div>
-            <span className="font-outfit text-3xl font-medium text-ashanti-gold">{pendingProducts}</span>
+            <span className="font-body text-3xl font-medium text-ashanti-gold">{pendingProducts}</span>
           </div>
           <div className="bg-white p-6 border border-black/10">
             <div className="flex items-center gap-3 text-muted-text mb-2">
               <DollarSign size={20} />
-              <span className="font-outfit text-xs uppercase tracking-wider">Revenue</span>
+              <span className="font-body text-xs uppercase tracking-wider">Revenue</span>
             </div>
-            <span className="font-outfit text-3xl font-medium">${totalRevenue.toFixed(2)}</span>
+            <span className="font-body text-3xl font-medium">${totalRevenue.toFixed(2)}</span>
           </div>
         </div>
 
@@ -372,13 +372,13 @@ const VendorDashboard = () => {
           <TabsList className="bg-transparent border-b border-black/10 w-full justify-start rounded-none h-auto p-0 mb-8">
             <TabsTrigger 
               value="products" 
-              className="font-outfit text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-6"
+              className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-6"
             >
               Products
             </TabsTrigger>
             <TabsTrigger 
               value="orders" 
-              className="font-outfit text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-6"
+              className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-6"
             >
               Orders
             </TabsTrigger>
@@ -410,10 +410,10 @@ const VendorDashboard = () => {
                       </div>
                     </div>
                     <div className="p-4">
-                      <h3 className="font-cinzel text-sm tracking-wide uppercase">{product.name}</h3>
+                      <h3 className="font-heading text-sm tracking-wide uppercase">{product.name}</h3>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="font-outfit text-lg font-medium">{product.currency} {product.price.toFixed(2)}</span>
-                        <span className="font-outfit text-sm text-muted-text">Stock: {product.stock}</span>
+                        <span className="font-body text-lg font-medium">{product.currency} {product.price.toFixed(2)}</span>
+                        <span className="font-body text-sm text-muted-text">Stock: {product.stock}</span>
                       </div>
                       <div className="flex gap-2 mt-4">
                         <Button
@@ -447,8 +447,8 @@ const VendorDashboard = () => {
             ) : (
               <div className="text-center py-16 bg-white border border-black/10">
                 <Package size={48} className="mx-auto text-muted-text mb-4" />
-                <h3 className="font-cinzel text-lg tracking-widest uppercase mb-2">No products yet</h3>
-                <p className="font-outfit text-muted-text mb-6">Add your first product to get started</p>
+                <h3 className="font-heading text-lg tracking-widest uppercase mb-2">No products yet</h3>
+                <p className="font-body text-muted-text mb-6">Add your first product to get started</p>
               </div>
             )}
           </TabsContent>
@@ -462,12 +462,12 @@ const VendorDashboard = () => {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                       <div>
                         <span className="font-mono text-sm">{order.order_id}</span>
-                        <div className="flex items-center gap-4 mt-2 font-outfit text-sm text-muted-text">
+                        <div className="flex items-center gap-4 mt-2 font-body text-sm text-muted-text">
                           <span>{new Date(order.created_at).toLocaleDateString()}</span>
                           <span className="capitalize">{order.order_status}</span>
                         </div>
                       </div>
-                      <span className="font-outfit text-xl font-medium">{order.currency} {order.total?.toFixed(2)}</span>
+                      <span className="font-body text-xl font-medium">{order.currency} {order.total?.toFixed(2)}</span>
                     </div>
                     <div className="border-t border-black/10 pt-4">
                       {order.items?.map((item, idx) => (
@@ -476,10 +476,10 @@ const VendorDashboard = () => {
                             <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                           </div>
                           <div className="flex-1">
-                            <span className="font-outfit text-sm">{item.name}</span>
-                            <span className="font-outfit text-xs text-muted-text block">Size: {item.size} × {item.quantity}</span>
+                            <span className="font-body text-sm">{item.name}</span>
+                            <span className="font-body text-xs text-muted-text block">Size: {item.size} × {item.quantity}</span>
                           </div>
-                          <span className="font-outfit">{order.currency} {(item.price * item.quantity).toFixed(2)}</span>
+                          <span className="font-body">{order.currency} {(item.price * item.quantity).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -489,8 +489,8 @@ const VendorDashboard = () => {
             ) : (
               <div className="text-center py-16 bg-white border border-black/10">
                 <ShoppingBag size={48} className="mx-auto text-muted-text mb-4" />
-                <h3 className="font-cinzel text-lg tracking-widest uppercase mb-2">No orders yet</h3>
-                <p className="font-outfit text-muted-text">Orders will appear here when customers purchase your products</p>
+                <h3 className="font-heading text-lg tracking-widest uppercase mb-2">No orders yet</h3>
+                <p className="font-body text-muted-text">Orders will appear here when customers purchase your products</p>
               </div>
             )}
           </TabsContent>

@@ -8,8 +8,8 @@ module.exports = {
   theme: {
         extend: {
                 fontFamily: {
-                        'cinzel': ['Cinzel', 'serif'],
-                        'outfit': ['Outfit', 'sans-serif'],
+                        'heading': ['Playfair Display', 'serif'],
+                        'body': ['DM Sans', 'sans-serif'],
                 },
                 borderRadius: {
                         lg: '0px',
