@@ -1,0 +1,114 @@
+{
+  "brand_identity": {
+    "name": "Black Star Threads",
+    "ethos": "Afro-Futurist Luxury. Heritage Woven with Speed.",
+    "tone": "Regal, Minimalist, Confident, Timeless.",
+    "persona": "The Modern Ashanti Royal. Values tradition but lives in the future."
+  },
+  "design_system": {
+    "theme": {
+      "mode": "light",
+      "strategy": "High-Contrast Editorial. Stark white backgrounds with deep black typography and rich gold accents."
+    },
+    "typography": {
+      "headings": {
+        "family": "Cinzel, serif",
+        "weights": ["400", "700", "900"],
+        "usage": "Hero titles, Section headers, Product names. Always uppercase for H1/H2.",
+        "letter_spacing": "tracking-widest"
+      },
+      "body": {
+        "family": "Outfit, sans-serif",
+        "weights": ["300", "400", "500", "700"],
+        "usage": "Paragraphs, UI elements, Navigation, Price tags.",
+        "letter_spacing": "tracking-wide"
+      },
+      "import_url": "https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Outfit:wght@300;400;500;700&display=swap"
+    },
+    "colors": {
+      "palette": {
+        "primary": "#000000",
+        "secondary": "#D4AF37",
+        "accent_red": "#CE1126",
+        "accent_green": "#006B3F",
+        "background": "#F9F9F7",
+        "surface": "#FFFFFF",
+        "border": "#E5E5E5",
+        "muted": "#888888"
+      },
+      "usage_rules": {
+        "primary": "Main text, Strong borders, Primary Buttons (Solid Black).",
+        "secondary": "Thin accents, Hover states, 'Premium' badges, Price highlights.",
+        "accent_red": "Sale tags, Error states, 'Limited Edition' markers. NEVER for main buttons.",
+        "accent_green": "Success states, 'In Stock' indicators.",
+        "background": "Main page background (Bone White).",
+        "surface": "Cards, Modals, Dropdowns."
+      }
+    },
+    "spacing": {
+      "grid_system": "Bento Grid (Mode A). Asymmetrical layouts. Use col-span-2 for feature items.",
+      "padding": "Generous. Section padding: py-24 or py-32. Container padding: px-6 md:px-12.",
+      "radius": "0px (Sharp/Brutalist) or 2px (Minimal). No rounded-xl."
+    },
+    "effects": {
+      "shadows": "Sharp, hard shadows: shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] for cards on hover.",
+      "gradients": "Subtle noise overlays only. NO CSS gradients for backgrounds.",
+      "glassmorphism": "Used sparingly for sticky headers: backdrop-blur-md bg-white/80 border-b border-black/5."
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_bg": "https://images.unsplash.com/photo-1727023663921-967d01f69c7e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHwzfHxhY2NyYSUyMGdoYW5hJTIwY2l0eSUyMG1vZGVybiUyMGFyY2hpdGVjdHVyZXxlbnwwfHx8fDE3NzQzNzI2Mzl8MA&ixlib=rb-4.1.0&q=85",
+      "categories": {
+        "men": "https://images.pexels.com/photos/33110007/pexels-photo-33110007.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "women": "https://images.pexels.com/photos/11976246/pexels-photo-11976246.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "accessories": "https://images.unsplash.com/photo-1660695828374-4ff51ac9df5d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHxrZW50ZSUyMGNsb3RoJTIwdGV4dHVyZSUyMGZhYnJpYyUyMGNsb3NlJTIwdXB8ZW58MHx8fHwxNzc0MzcyNjM4fDA&ixlib=rb-4.1.0&q=85"
+      },
+      "placeholders": "Use high-fashion, desaturated images. Avoid stocky 'smiling people shaking hands' photos."
+    },
+    "icons": "Lucide React (thin stroke, stroke-width=1.5). Use 'Star' icon heavily as a brand element."
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-black text-white hover:bg-gold hover:text-black transition-all duration-300 uppercase tracking-widest text-xs py-4 px-8 border border-black",
+      "secondary": "bg-transparent text-black border border-black hover:bg-black hover:text-white transition-all duration-300 uppercase tracking-widest text-xs py-4 px-8"
+    },
+    "cards": {
+      "product": "border border-transparent hover:border-black transition-all duration-300 group relative overflow-hidden",
+      "feature": "bg-black text-white p-8 relative overflow-hidden. Use gold text for accents."
+    },
+    "inputs": {
+      "style": "bg-transparent border-b border-black/20 focus:border-black outline-none rounded-none px-0 py-4 placeholder:text-black/40 transition-all"
+    }
+  },
+  "layout_strategies": {
+    "landing_page": {
+      "hero": "Full-screen cinematic intro. Text overlay: 'THE BLACK STAR COLLECTION'. Parallax scrolling.",
+      "featured_grid": "Bento Grid. 1 Large item (left), 2 Small items (right stacked).",
+      "ticker": "Infinite marquee with 'GHANA • HERITAGE • LUXURY • SOCCER •' separator by Star icons."
+    },
+    "product_page": {
+      "layout": "Split screen. Left: Sticky Product Details. Right: Scrollable Image Gallery (Simulating a lookbook).",
+      "add_to_cart": "Fixed bottom bar on mobile. Sticky sidebar on desktop."
+    },
+    "dashboard": {
+      "vendor": "Clean, data-dense. Use simple tables with mono-spaced numbers. Status badges: Outline only (no solid bg colors to avoid clutter).",
+      "admin": "Dark Mode Sidebar. White Content Area. High contrast for readability."
+    }
+  },
+  "implementation_steps": [
+    "1. Setup Typography: Import Cinzel and Outfit in index.css. Update tailwind.config.js.",
+    "2. Setup Colors: Add custom colors to tailwind.config.js (ashanti-gold, midnight, bone-white).",
+    "3. Create Layouts: Build the 'BentoGrid' component and 'Marquee' component first.",
+    "4. Develop Components: Customize Shadcn buttons, inputs, and cards to match the 'Sharp/Brutalist' aesthetic.",
+    "5. Build Pages: Assemble Landing, Product Listing, and Detail pages using the new components.",
+    "6. Apply Animations: Add 'entrance' animations (fade-up) to all sections using Framer Motion."
+  ],
+  "universal_guidelines": [
+    "Do NOT use standard Shadcn cards with rounded corners and soft shadows.",
+    "Do NOT use gradients on buttons.",
+    "Ensure all images have a subtle 'grayscale' filter that lifts on hover.",
+    "Use 'tracking-widest' for all uppercase headings.",
+    "All interactive elements must have `data-testid` attributes."
+  ]
+}
