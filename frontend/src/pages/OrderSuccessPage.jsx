@@ -70,7 +70,7 @@ const OrderSuccessPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-bone-white">
-        <Header />
+        <Header forceLight={true} />
         <div className="pt-32 flex items-center justify-center">
           <div className="animate-pulse text-center">
             <div className="w-16 h-16 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -83,7 +83,7 @@ const OrderSuccessPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="order-success-page">
-      <Header />
+      <Header forceLight={true} />
 
       <div className="pt-32 pb-24 px-6 md:px-12 max-w-3xl mx-auto text-center">
         <div className="bg-white p-12 border border-black/10">

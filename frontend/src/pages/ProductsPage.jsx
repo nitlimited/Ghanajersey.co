@@ -71,7 +71,7 @@ const ProductsPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="products-page">
-      <Header />
+      <Header forceLight={true} />
 
       {/* Page Header */}
       <div className="pt-32 pb-12 px-6 md:px-12 bg-black text-white">

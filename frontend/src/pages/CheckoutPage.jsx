@@ -150,7 +150,7 @@ const CheckoutPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="checkout-page">
-      <Header />
+      <Header forceLight={true} />
 
       <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
         <h1 className="font-heading text-2xl md:text-3xl tracking-widest uppercase mb-12" data-testid="checkout-title">

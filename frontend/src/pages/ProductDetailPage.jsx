@@ -73,7 +73,7 @@ const ProductDetailPage = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-bone-white">
-        <Header />
+        <Header forceLight={true} />
         <div className="pt-32 max-w-7xl mx-auto px-6 md:px-12">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
             <div className="aspect-[3/4] bg-gray-200 animate-pulse"></div>
@@ -91,7 +91,7 @@ const ProductDetailPage = () => {
   if (!product) {
     return (
       <div className="min-h-screen bg-bone-white">
-        <Header />
+        <Header forceLight={true} />
         <div className="pt-32 max-w-7xl mx-auto px-6 md:px-12 text-center py-20">
           <h1 className="font-heading text-2xl mb-4">Product Not Found</h1>
           <Link to="/products">
@@ -105,7 +105,7 @@ const ProductDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="product-detail-page">
-      <Header />
+      <Header forceLight={true} />
 
       {/* Breadcrumb */}
       <div className="pt-24 px-6 md:px-12 max-w-7xl mx-auto">

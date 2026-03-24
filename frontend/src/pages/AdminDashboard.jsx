@@ -97,7 +97,7 @@ const AdminDashboard = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-bone-white">
-        <Header />
+        <Header forceLight={true} />
         <div className="pt-32 flex items-center justify-center">
           <div className="animate-pulse">
             <div className="w-12 h-12 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
@@ -109,7 +109,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="admin-dashboard">
-      <Header />
+      <Header forceLight={true} />
 
       <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
         {/* Title */}

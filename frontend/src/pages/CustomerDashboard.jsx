@@ -46,7 +46,7 @@ const CustomerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="customer-dashboard">
-      <Header />
+      <Header forceLight={true} />
 
       <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
         {/* Welcome */}
