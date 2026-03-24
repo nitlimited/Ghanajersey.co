@@ -507,10 +507,15 @@ async def get_vendor_products(user: dict = Depends(get_vendor_user)):
 async def create_product(product: ProductCreate, user: dict = Depends(get_vendor_user)):
     product_id = f"prod_{uuid.uuid4().hex[:12]}"
     
+    # Safely get vendor name
+    vendor_profile = user.get("vendor_profile") or {}
+    vendor_name = vendor_profile.get("brand_name") if vendor_profile else None
+    vendor_name = vendor_name or user.get("name", "Unknown Vendor")
+    
     product_doc = {
         "product_id": product_id,
         "vendor_id": user["user_id"],
-        "vendor_name": user.get("vendor_profile", {}).get("brand_name") or user["name"],
+        "vendor_name": vendor_name,
         **product.model_dump(),
         "status": "pending",
         "featured": False,
