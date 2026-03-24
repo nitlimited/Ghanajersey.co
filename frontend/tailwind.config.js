@@ -9,7 +9,7 @@ module.exports = {
         extend: {
                 fontFamily: {
                         'heading': ['Playfair Display', 'serif'],
-                        'body': ['DM Sans', 'sans-serif'],
+                        'body': ['Inter', 'sans-serif'],
                 },
                 borderRadius: {
                         lg: '0px',
@@ -21,7 +21,7 @@ module.exports = {
                         background: '#F9F9F7',
                         foreground: '#000000',
                         'bone-white': '#F9F9F7',
-                        'ashanti-gold': '#D4AF37',
+                        'ashanti-gold': '#fed506',
                         'midnight': '#000000',
                         'ghana-red': '#CE1126',
                         'ghana-green': '#006B3F',
@@ -41,7 +41,7 @@ module.exports = {
                                 foreground: '#FFFFFF'
                         },
                         secondary: {
-                                DEFAULT: '#D4AF37',
+                                DEFAULT: '#fed506',
                                 foreground: '#000000'
                         },
                         muted: {
@@ -49,7 +49,7 @@ module.exports = {
                                 foreground: '#888888'
                         },
                         accent: {
-                                DEFAULT: '#D4AF37',
+                                DEFAULT: '#fed506',
                                 foreground: '#000000'
                         },
                         destructive: {
@@ -60,7 +60,7 @@ module.exports = {
                         input: '#E5E5E5',
                         ring: '#000000',
                         chart: {
-                                '1': '#D4AF37',
+                                '1': '#fed506',
                                 '2': '#CE1126',
                                 '3': '#006B3F',
                                 '4': '#000000',

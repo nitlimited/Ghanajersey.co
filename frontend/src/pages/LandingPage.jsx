@@ -21,24 +21,24 @@ const Header = () => {
   }, []);
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'glass-header' : 'bg-transparent'}`}>
+    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'glass-header border-b border-black/10' : 'bg-transparent border-b border-white/30'}`}>
       <div className="max-w-7xl mx-auto px-6 md:px-12">
         <div className="flex items-center justify-between h-20">
           {/* Left - Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="/products?category=women" className="font-body text-sm font-medium tracking-wide hover:text-ashanti-gold transition-colors" data-testid="nav-women">
+            <Link to="/products?category=women" className={`font-body text-sm font-semibold tracking-wide transition-colors ${isScrolled ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-women">
               Women
             </Link>
-            <Link to="/products?category=men" className="font-body text-sm font-medium tracking-wide hover:text-ashanti-gold transition-colors" data-testid="nav-men">
+            <Link to="/products?category=men" className={`font-body text-sm font-semibold tracking-wide transition-colors ${isScrolled ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-men">
               Men
             </Link>
-            <Link to="/products?category=youth" className="font-body text-sm font-medium tracking-wide hover:text-ashanti-gold transition-colors" data-testid="nav-youth">
+            <Link to="/products?category=youth" className={`font-body text-sm font-semibold tracking-wide transition-colors ${isScrolled ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-youth">
               Youth
             </Link>
-            <Link to="/products?category=kids" className="font-body text-sm font-medium tracking-wide hover:text-ashanti-gold transition-colors" data-testid="nav-kids">
+            <Link to="/products?category=kids" className={`font-body text-sm font-semibold tracking-wide transition-colors ${isScrolled ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-kids">
               Kids
             </Link>
-            <Link to="/products?category=lifestyle" className="font-body text-sm font-medium tracking-wide hover:text-ashanti-gold transition-colors" data-testid="nav-lifestyle">
+            <Link to="/products?category=lifestyle" className={`font-body text-sm font-semibold tracking-wide transition-colors ${isScrolled ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-lifestyle">
               Lifestyle
             </Link>
           </nav>
@@ -48,32 +48,32 @@ const Header = () => {
             <img 
               src="https://customer-assets.emergentagent.com/job_f5f5b77d-4869-424b-bf9b-df9ab6eb583a/artifacts/nhldagq1_black%20star-01.svg" 
               alt="Black Star" 
-              className="w-10 h-10"
+              className={`w-10 h-10 transition-all ${isScrolled ? '' : 'invert'}`}
             />
           </Link>
 
           {/* Right - Icons */}
-          <div className="flex items-center gap-4">
+          <div className={`flex items-center gap-4 ${isScrolled ? 'text-black' : 'text-white'}`}>
             {user ? (
               <div className="relative group">
-                <button className="flex items-center gap-2 font-body text-sm font-medium" data-testid="user-menu">
+                <button className="flex items-center gap-2 font-body text-sm font-semibold" data-testid="user-menu">
                   <User size={20} />
                   <span className="hidden md:block">{user.name?.split(' ')[0]}</span>
                 </button>
                 <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-black/10 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                  <Link to="/dashboard" className="block px-4 py-2 hover:bg-black/5 font-body text-sm" data-testid="link-dashboard">
+                  <Link to="/dashboard" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-dashboard">
                     My Orders
                   </Link>
-                  <Link to="/wishlist" className="block px-4 py-2 hover:bg-black/5 font-body text-sm" data-testid="link-wishlist">
+                  <Link to="/wishlist" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-wishlist">
                     Wishlist
                   </Link>
                   {user.role === "vendor" && (
-                    <Link to="/vendor" className="block px-4 py-2 hover:bg-black/5 font-body text-sm" data-testid="link-vendor">
+                    <Link to="/vendor" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-vendor">
                       Vendor Dashboard
                     </Link>
                   )}
                   {user.role === "admin" && (
-                    <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm" data-testid="link-admin">
+                    <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
                       Admin Dashboard
                     </Link>
                   )}
@@ -83,7 +83,7 @@ const Header = () => {
                 </div>
               </div>
             ) : (
-              <Link to="/auth" className="font-body text-sm font-medium tracking-wide hover:text-ashanti-gold transition-colors" data-testid="link-auth">
+              <Link to="/auth" className="hover:text-ashanti-gold transition-colors" data-testid="link-auth">
                 <User size={20} />
               </Link>
             )}
@@ -93,7 +93,7 @@ const Header = () => {
             <Link to="/cart" className="relative hover:text-ashanti-gold transition-colors" data-testid="link-cart">
               <ShoppingBag size={20} />
               {cart.items.length > 0 && (
-                <span className="absolute -top-2 -right-2 w-5 h-5 bg-black text-white text-xs flex items-center justify-center">
+                <span className="absolute -top-2 -right-2 w-5 h-5 bg-ashanti-gold text-black text-xs flex items-center justify-center font-semibold">
                   {cart.items.length}
                 </span>
               )}
@@ -109,19 +109,19 @@ const Header = () => {
       {isMenuOpen && (
         <div className="md:hidden bg-white border-t border-black/10">
           <nav className="flex flex-col py-4">
-            <Link to="/products?category=women" className="px-6 py-3 font-body text-sm font-medium tracking-wide" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/products?category=women" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
               Women
             </Link>
-            <Link to="/products?category=men" className="px-6 py-3 font-body text-sm font-medium tracking-wide" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/products?category=men" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
               Men
             </Link>
-            <Link to="/products?category=youth" className="px-6 py-3 font-body text-sm font-medium tracking-wide" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/products?category=youth" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
               Youth
             </Link>
-            <Link to="/products?category=kids" className="px-6 py-3 font-body text-sm font-medium tracking-wide" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/products?category=kids" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
               Kids
             </Link>
-            <Link to="/products?category=lifestyle" className="px-6 py-3 font-body text-sm font-medium tracking-wide" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/products?category=lifestyle" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
               Lifestyle
             </Link>
           </nav>
@@ -216,8 +216,8 @@ const Marquee = () => {
       <div className="flex animate-marquee whitespace-nowrap">
         {[...items, ...items, ...items, ...items].map((item, index) => (
           <span key={index} className="flex items-center mx-4">
-            <Star size={12} className="text-ashanti-gold mr-4" fill="#D4AF37" />
-            <span className="font-body text-sm font-medium tracking-wide">{item}</span>
+            <Star size={12} className="text-ashanti-gold mr-4" fill="#fed506" />
+            <span className="font-body text-sm font-semibold tracking-wide">{item}</span>
           </span>
         ))}
       </div>
@@ -252,7 +252,7 @@ const ProductCard = ({ product }) => {
             </span>
             {product.rating > 0 && (
               <div className="flex items-center gap-1">
-                <Star size={12} fill="#D4AF37" className="text-ashanti-gold" />
+                <Star size={12} fill="#fed506" className="text-ashanti-gold" />
                 <span className="font-body text-xs text-muted-text">{product.rating}</span>
               </div>
             )}
@@ -293,8 +293,17 @@ const LandingPage = () => {
     clubs: "https://images.pexels.com/photos/33110007/pexels-photo-33110007.jpeg?auto=compress&cs=tinysrgb&w=600",
     national: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600",
     retro: "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600",
-    streetwear: "https://images.pexels.com/photos/11976246/pexels-photo-11976246.jpeg?auto=compress&cs=tinysrgb&w=600"
+    streetwear: "https://images.pexels.com/photos/11976246/pexels-photo-11976246.jpeg?auto=compress&cs=tinysrgb&w=600",
+    local: "https://images.unsplash.com/photo-1517466787929-bc90951d0974?w=600"
   };
+
+  const shopCategories = [
+    { id: "national", name: "National Team", description: "Ghana Black Stars jerseys" },
+    { id: "clubs", name: "Club Jerseys", description: "Official and replica club jerseys" },
+    { id: "local", name: "Local Team", description: "Support your local Ghanaian clubs" },
+    { id: "retro", name: "Retro Collection", description: "Classic and vintage designs" },
+    { id: "streetwear", name: "Streetwear", description: "Modern casual football fashion" }
+  ];
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="landing-page">
@@ -319,7 +328,7 @@ const LandingPage = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up" style={{ animationDelay: '0.4s' }}>
             <Link to="/products">
-              <Button className="bg-white text-black hover:bg-ashanti-gold hover:text-black px-10 py-6 font-body font-semibold tracking-wide text-sm" data-testid="hero-shop-btn">
+              <Button className="bg-ashanti-gold text-black hover:bg-white hover:text-black px-10 py-6 font-body font-semibold tracking-wide text-sm" data-testid="hero-shop-btn">
                 Shop Collection
               </Button>
             </Link>
@@ -327,7 +336,7 @@ const LandingPage = () => {
               <Button 
                 onClick={loginWithGoogle}
                 variant="outline" 
-                className="border-white text-white hover:bg-white hover:text-black px-10 py-6 font-body font-semibold tracking-wide text-sm"
+                className="border-white text-white hover:bg-ashanti-gold hover:text-black hover:border-ashanti-gold px-10 py-6 font-body font-semibold tracking-wide text-sm"
                 data-testid="hero-join-btn"
               >
                 Become a Vendor
@@ -343,35 +352,54 @@ const LandingPage = () => {
       {/* Marquee */}
       <Marquee />
 
-      {/* Categories Bento Grid */}
+      {/* Categories Section */}
       <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto">
-        <h2 className="font-heading text-2xl md:text-3xl tracking-wide text-center mb-16" data-testid="categories-title">
+        <h2 className="font-heading text-2xl md:text-3xl tracking-wide text-center mb-4" data-testid="categories-title">
           Shop by Category
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {categories.map((category, index) => (
+        <p className="font-body text-center text-muted-text mb-16 max-w-xl mx-auto">
+          Explore our curated collection of authentic Ghanaian jerseys
+        </p>
+        
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          {shopCategories.map((category, index) => (
             <Link
               key={category.id}
               to={`/products?category=${category.id}`}
-              className={`relative overflow-hidden group ${index === 0 ? 'col-span-2 row-span-2' : ''}`}
+              className="group relative"
               data-testid={`category-${category.id}`}
             >
-              <div className={`${index === 0 ? 'aspect-square' : 'aspect-[4/5]'} overflow-hidden`}>
-                <img
-                  src={categoryImages[category.id]}
-                  alt={category.name}
-                  className="w-full h-full object-cover grayscale-hover group-hover:scale-105 transition-all duration-700"
-                />
-              </div>
-              <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-all duration-300 flex items-end p-6">
-                <div>
-                  <h3 className="font-heading text-white text-lg md:text-xl">
+              <div className="relative overflow-hidden bg-black">
+                {/* Image with overlay */}
+                <div className="aspect-[3/4] overflow-hidden">
+                  <img
+                    src={categoryImages[category.id]}
+                    alt={category.name}
+                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
+                  />
+                </div>
+                
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                
+                {/* Content */}
+                <div className="absolute bottom-0 left-0 right-0 p-5">
+                  <h3 className="font-heading text-white text-lg mb-1 group-hover:text-ashanti-gold transition-colors">
                     {category.name}
                   </h3>
-                  <span className="font-body text-white/60 text-xs mt-1 block">
+                  <p className="font-body text-white/60 text-xs leading-relaxed">
                     {category.description}
-                  </span>
+                  </p>
+                  
+                  {/* Shop Now indicator */}
+                  <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                    <span className="font-body text-ashanti-gold text-xs font-semibold uppercase tracking-wider">Shop Now</span>
+                    <ChevronRight size={14} className="text-ashanti-gold" />
+                  </div>
                 </div>
+                
+                {/* Corner accent */}
+                <div className="absolute top-0 right-0 w-0 h-0 border-t-[40px] border-t-ashanti-gold border-l-[40px] border-l-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </div>
             </Link>
           ))}
