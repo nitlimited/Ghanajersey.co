@@ -424,10 +424,10 @@ const LandingPage = () => {
 
   const categoryImages = {
     "official-tournament": "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600",
-    "streetwear": "https://images.pexels.com/photos/11976246/pexels-photo-11976246.jpeg?auto=compress&cs=tinysrgb&w=600",
-    "fan": "https://images.unsplash.com/photo-1517466787929-bc90951d0974?w=600",
-    "retro": "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600",
-    "creative-designer": "https://images.pexels.com/photos/33110007/pexels-photo-33110007.jpeg?auto=compress&cs=tinysrgb&w=600",
+    "streetwear": "https://customer-assets.emergentagent.com/job_cb12ac7a-c9cc-4935-bad8-6211db546e33/artifacts/npfb0v0p_Streetwear.jpg",
+    "fan": "https://customer-assets.emergentagent.com/job_cb12ac7a-c9cc-4935-bad8-6211db546e33/artifacts/sn4uod8p_Fan%20Jeserys.avif",
+    "retro": "https://customer-assets.emergentagent.com/job_cb12ac7a-c9cc-4935-bad8-6211db546e33/artifacts/kq98wucm_Retro.jpg",
+    "creative-designer": "https://customer-assets.emergentagent.com/job_cb12ac7a-c9cc-4935-bad8-6211db546e33/artifacts/ypiv8t75_Creative%20designer.jpg",
     "local-club": "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=600"
   };
 
