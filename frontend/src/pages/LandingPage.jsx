@@ -6,9 +6,9 @@ import { useAuth, useCart, API } from "../App";
 import axios from "axios";
 
 // Announcement Bar Component
-const AnnouncementBar = () => {
+const AnnouncementBar = ({ isSticky = false }) => {
   return (
-    <div className="bg-black text-white py-2 px-4">
+    <div className={`bg-black text-white py-2 px-4 ${isSticky ? 'sticky top-0 z-50' : ''}`}>
       <div className="max-w-7xl mx-auto flex items-center justify-center">
         <p className="font-body text-xs md:text-sm tracking-wide text-center">
           <span className="text-ashanti-gold font-semibold">FREE SHIPPING</span> on orders over $100 | Use code <span className="text-ashanti-gold font-semibold">GHANA10</span> for 10% off
@@ -19,7 +19,9 @@ const AnnouncementBar = () => {
 };
 
 // Header Component
-const Header = ({ forceLight = false }) => {
+// forceLight: use light background styling
+// stickyAnnouncement: keep both announcement bar and header sticky (for product/category pages)
+const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -48,10 +50,17 @@ const Header = ({ forceLight = false }) => {
   // Determine if we should use dark (black) text
   const useDarkText = forceLight || isScrolled;
 
+  // Header position: 
+  // - If stickyAnnouncement: header is sticky at top-8 (below announcement bar)
+  // - If homepage (not stickyAnnouncement): header moves to top-0 when scrolled
+  const headerTopClass = stickyAnnouncement 
+    ? 'sticky top-8' 
+    : `fixed ${isScrolled ? 'top-0' : 'top-8'}`;
+
   return (
     <>
-      <AnnouncementBar />
-      <header className={`fixed top-8 left-0 right-0 z-50 transition-all duration-300 ${isScrolled || forceLight ? 'bg-white/95 backdrop-blur-sm shadow-sm' : 'bg-transparent'}`}>
+      <AnnouncementBar isSticky={stickyAnnouncement} />
+      <header className={`${headerTopClass} left-0 right-0 z-40 transition-all duration-300 ${isScrolled || forceLight ? 'bg-white/95 backdrop-blur-sm shadow-sm' : 'bg-transparent'}`}>
         {/* Ghana Flag Border - 3 lines */}
         <div className="flex w-full">
           <div className="h-[1.5px] flex-1 bg-ghana-red"></div>

@@ -3,9 +3,9 @@ import { Header, Footer } from "./LandingPage";
 const PrivacyPage = () => {
   return (
     <div className="min-h-screen bg-bone-white" data-testid="privacy-page">
-      <Header forceLight={true} />
+      <Header forceLight={true} stickyAnnouncement={true} />
 
-      <div className="pt-32 pb-24 px-6 md:px-12 max-w-4xl mx-auto">
+      <div className="pt-12 pb-24 px-6 md:px-12 max-w-4xl mx-auto">
         <h1 className="font-heading text-3xl md:text-4xl mb-8">Privacy Policy</h1>
         <p className="font-body text-sm text-muted-text mb-8">Last updated: January 2024</p>
 

@@ -93,9 +93,9 @@ const ComparePage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="compare-page">
-      <Header forceLight={true} />
+      <Header forceLight={true} stickyAnnouncement={true} />
 
-      <div className="pt-32 pb-24 px-6 md:px-12 max-w-6xl mx-auto">
+      <div className="pt-12 pb-24 px-6 md:px-12 max-w-6xl mx-auto">
         <h1 className="font-heading text-2xl md:text-3xl text-center mb-4">Compare Jerseys</h1>
         <p className="font-body text-center text-muted-text mb-12">
           Select two jerseys to compare side by side
