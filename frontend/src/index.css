@@ -110,3 +110,15 @@ code {
         display: contents !important;
     }
 }
+
+/* Hide Emergent branding */
+[class*="emergent"],
+[id*="emergent"],
+a[href*="emergentagent.com"]:not([href*="customer-assets"]),
+div[style*="Made with"],
+.emergent-badge,
+#emergent-badge {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
