@@ -100,6 +100,9 @@ class ProductCreate(BaseModel):
     images: List[str]
     tags: Optional[List[str]] = []
     is_limited_edition: bool = False
+    # Customization options
+    allows_customization: bool = False
+    customization_price: Optional[float] = 0.0
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -113,6 +116,9 @@ class ProductUpdate(BaseModel):
     images: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     is_limited_edition: Optional[bool] = None
+    # Customization options
+    allows_customization: Optional[bool] = None
+    customization_price: Optional[float] = None
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -138,10 +144,17 @@ class ProductResponse(BaseModel):
     created_at: datetime
 
 # Cart Models
+# Customization Model
+class Customization(BaseModel):
+    name: Optional[str] = None
+    number: Optional[str] = None
+    price: Optional[float] = 0.0
+
 class CartItem(BaseModel):
     product_id: str
     quantity: int
     size: str
+    customization: Optional[Customization] = None
 
 class CartItemResponse(BaseModel):
     product_id: str
@@ -151,6 +164,7 @@ class CartItemResponse(BaseModel):
     quantity: int
     size: str
     image: str
+    customization: Optional[dict] = None
 
 # Wishlist Models
 class WishlistItem(BaseModel):
@@ -1149,16 +1163,24 @@ async def get_cart(user: dict = Depends(get_current_user)):
             {"_id": 0}
         )
         if product:
-            item_total = product["price"] * item["quantity"]
+            item_price = product["price"]
+            # Add customization price if present
+            customization = item.get("customization")
+            if customization and (customization.get("name") or customization.get("number")):
+                item_price += customization.get("price", 0)
+            
+            item_total = item_price * item["quantity"]
             total += item_total
             items.append({
                 "product_id": product["product_id"],
                 "name": product["name"],
-                "price": product["price"],
+                "price": item_price,
+                "base_price": product["price"],
                 "currency": product["currency"],
                 "quantity": item["quantity"],
                 "size": item["size"],
-                "image": product["images"][0] if product["images"] else ""
+                "image": product["images"][0] if product["images"] else "",
+                "customization": customization
             })
     
     return {"items": items, "total": round(total, 2)}
@@ -1177,15 +1199,33 @@ async def add_to_cart(item: CartItem, user: dict = Depends(get_current_user)):
     if item.size not in product["sizes"]:
         raise HTTPException(status_code=400, detail="Size not available")
     
+    # Validate customization
+    if item.customization and item.customization.name:
+        if not product.get("allows_customization"):
+            raise HTTPException(status_code=400, detail="This product does not allow customization")
+    
     cart = await db.carts.find_one({"user_id": user["user_id"]})
     
+    # Build cart item data
+    cart_item_data = {
+        "product_id": item.product_id,
+        "quantity": item.quantity,
+        "size": item.size,
+        "vendor_id": product.get("vendor_id"),
+        "customization": item.customization.model_dump() if item.customization else None
+    }
+    
     if cart:
-        # Check if item already exists
+        # Check if item already exists (without customization)
+        # Note: customized items are always added as new items
         existing_item = None
-        for i, existing in enumerate(cart.get("items", [])):
-            if existing["product_id"] == item.product_id and existing["size"] == item.size:
-                existing_item = i
-                break
+        if not item.customization or (not item.customization.name and not item.customization.number):
+            for i, existing in enumerate(cart.get("items", [])):
+                if (existing["product_id"] == item.product_id and 
+                    existing["size"] == item.size and 
+                    not existing.get("customization", {}).get("name")):
+                    existing_item = i
+                    break
         
         if existing_item is not None:
             await db.carts.update_one(
@@ -1195,12 +1235,12 @@ async def add_to_cart(item: CartItem, user: dict = Depends(get_current_user)):
         else:
             await db.carts.update_one(
                 {"user_id": user["user_id"]},
-                {"$push": {"items": item.model_dump()}}
+                {"$push": {"items": cart_item_data}}
             )
     else:
         cart_doc = {
             "user_id": user["user_id"],
-            "items": [item.model_dump()],
+            "items": [cart_item_data],
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.carts.insert_one(cart_doc)

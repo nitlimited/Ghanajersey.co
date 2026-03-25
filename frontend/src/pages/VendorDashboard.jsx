@@ -39,7 +39,9 @@ const VendorDashboard = () => {
     sizes: ["S", "M", "L", "XL"],
     stock: "",
     images: ["", ""],
-    tags: []
+    tags: [],
+    allows_customization: false,
+    customization_price: ""
   });
 
   // Promo form state
@@ -100,7 +102,9 @@ const VendorDashboard = () => {
         ...productForm,
         price: parseFloat(productForm.price),
         stock: parseInt(productForm.stock) || 0,
-        images: productForm.images.filter(img => img.trim() !== "")
+        images: productForm.images.filter(img => img.trim() !== ""),
+        allows_customization: productForm.allows_customization,
+        customization_price: productForm.allows_customization ? parseFloat(productForm.customization_price) || 0 : 0
       };
 
       if (editingProduct) {
@@ -242,7 +246,9 @@ const VendorDashboard = () => {
       sizes: product.sizes,
       stock: product.stock.toString(),
       images: product.images.length > 0 ? [...product.images, ""] : ["", ""],
-      tags: product.tags || []
+      tags: product.tags || [],
+      allows_customization: product.allows_customization || false,
+      customization_price: (product.customization_price || "").toString()
     });
     setShowProductModal(true);
   };
@@ -257,7 +263,9 @@ const VendorDashboard = () => {
       sizes: ["S", "M", "L", "XL"],
       stock: "",
       images: ["", ""],
-      tags: []
+      tags: [],
+      allows_customization: false,
+      customization_price: ""
     });
   };
 
@@ -436,6 +444,42 @@ const VendorDashboard = () => {
                   >
                     + Add More Images
                   </Button>
+                </div>
+
+                {/* Customization Option */}
+                <div className="border border-black/10 p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <Label className="font-body text-sm uppercase tracking-wider">Allow Customization</Label>
+                      <p className="font-body text-xs text-muted-text">Let customers add their name and number on the back</p>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={productForm.allows_customization}
+                        onChange={(e) => setProductForm({...productForm, allows_customization: e.target.checked})}
+                        className="w-5 h-5 accent-ashanti-gold"
+                      />
+                    </label>
+                  </div>
+                  
+                  {productForm.allows_customization && (
+                    <div className="pt-4 border-t border-black/10">
+                      <Label className="font-body text-sm uppercase tracking-wider">Customization Price</Label>
+                      <p className="font-body text-xs text-muted-text mb-2">Additional charge for customization</p>
+                      <div className="flex items-center gap-2">
+                        <span className="font-body text-sm">$</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={productForm.customization_price}
+                          onChange={(e) => setProductForm({...productForm, customization_price: e.target.value})}
+                          placeholder="15.00"
+                          className="w-32"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Button type="submit" className="w-full bg-black hover:bg-ashanti-gold hover:text-black">

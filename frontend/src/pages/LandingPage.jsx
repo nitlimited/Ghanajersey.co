@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search, Home } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useAuth, useCart, API } from "../App";
 import axios from "axios";
@@ -8,7 +8,7 @@ import axios from "axios";
 // Announcement Bar Component
 const AnnouncementBar = ({ isSticky = false }) => {
   return (
-    <div className={`bg-black text-white py-2 px-4 ${isSticky ? 'sticky top-0 z-50' : ''}`}>
+    <div className={`bg-black text-white py-2 px-4 hidden md:block ${isSticky ? 'sticky top-0 z-50' : ''}`}>
       <div className="max-w-7xl mx-auto flex items-center justify-center">
         <p className="font-body text-xs md:text-sm tracking-wide text-center">
           <span className="text-ashanti-gold font-semibold">FREE SHIPPING</span> on orders over $100 | Use code <span className="text-ashanti-gold font-semibold">GHANA10</span> for 10% off
@@ -18,17 +18,139 @@ const AnnouncementBar = ({ isSticky = false }) => {
   );
 };
 
+// Full Screen Search Overlay
+const SearchOverlay = ({ isOpen, onClose }) => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center" data-testid="search-overlay">
+      <button 
+        onClick={onClose} 
+        className="absolute top-6 right-6 text-white hover:text-ashanti-gold transition-colors"
+        data-testid="close-search"
+      >
+        <X size={32} />
+      </button>
+      
+      <div className="w-full max-w-2xl px-6">
+        <form onSubmit={handleSearch} className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search jerseys..."
+            className="w-full bg-transparent border-b-2 border-white/30 focus:border-ashanti-gold text-white text-2xl md:text-4xl font-heading tracking-wider py-4 px-2 outline-none placeholder:text-white/40"
+            autoFocus
+            data-testid="search-input-fullscreen"
+          />
+          <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 text-white hover:text-ashanti-gold">
+            <Search size={28} />
+          </button>
+        </form>
+        <p className="text-white/40 font-body text-sm mt-4 text-center">Press Enter to search or ESC to close</p>
+      </div>
+
+      {/* Quick Links */}
+      <div className="mt-12 text-center">
+        <p className="text-white/60 font-body text-xs uppercase tracking-wider mb-4">Popular Categories</p>
+        <div className="flex flex-wrap justify-center gap-3">
+          {["Tournament", "Streetwear", "Fan", "Retro", "Designers"].map((cat) => (
+            <Link
+              key={cat}
+              to={`/products?category=${cat.toLowerCase() === 'designers' ? 'creative-designer' : cat.toLowerCase() === 'tournament' ? 'official-tournament' : cat.toLowerCase()}`}
+              onClick={onClose}
+              className="px-4 py-2 border border-white/20 text-white hover:border-ashanti-gold hover:text-ashanti-gold font-body text-sm transition-colors"
+            >
+              {cat}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Mobile Bottom Navigation
+const MobileBottomNav = () => {
+  const location = useLocation();
+  const { user } = useAuth();
+  const { cart } = useCart();
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const isActive = (path) => location.pathname === path;
+
+  return (
+    <>
+      <SearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-black/10 z-50 pb-safe">
+        <div className="flex items-center justify-around h-16">
+          <Link 
+            to="/" 
+            className={`flex flex-col items-center justify-center flex-1 py-2 ${isActive('/') ? 'text-ashanti-gold' : 'text-black'}`}
+          >
+            <Home size={20} />
+            <span className="text-[10px] font-body mt-1">Home</span>
+          </Link>
+          <button 
+            onClick={() => setSearchOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 py-2 text-black"
+          >
+            <Search size={20} />
+            <span className="text-[10px] font-body mt-1">Search</span>
+          </button>
+          <Link 
+            to="/wishlist" 
+            className={`flex flex-col items-center justify-center flex-1 py-2 ${isActive('/wishlist') ? 'text-ashanti-gold' : 'text-black'}`}
+          >
+            <Heart size={20} />
+            <span className="text-[10px] font-body mt-1">Wishlist</span>
+          </Link>
+          <Link 
+            to={user ? "/dashboard" : "/auth"} 
+            className={`flex flex-col items-center justify-center flex-1 py-2 ${isActive('/dashboard') || isActive('/auth') ? 'text-ashanti-gold' : 'text-black'}`}
+          >
+            <User size={20} />
+            <span className="text-[10px] font-body mt-1">{user ? 'Account' : 'Login'}</span>
+          </Link>
+          <Link 
+            to="/cart" 
+            className={`flex flex-col items-center justify-center flex-1 py-2 relative ${isActive('/cart') ? 'text-ashanti-gold' : 'text-black'}`}
+          >
+            <div className="relative">
+              <ShoppingBag size={20} />
+              {cart.items.length > 0 && (
+                <span className="absolute -top-2 -right-2 w-4 h-4 bg-ashanti-gold text-black text-[9px] flex items-center justify-center font-semibold rounded-full">
+                  {cart.items.length}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-body mt-1">Cart</span>
+          </Link>
+        </div>
+      </div>
+    </>
+  );
+};
+
 // Header Component
-// forceLight: use light background styling
-// stickyAnnouncement: keep both announcement bar and header sticky (for product/category pages)
 const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const { user, logout } = useAuth();
   const { cart } = useCart();
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -38,27 +160,24 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery("");
-      setSearchOpen(false);
-    }
-  };
+  // Close search on ESC key
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') setSearchOpen(false);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
 
-  // Determine if we should use dark (black) text
   const useDarkText = forceLight || isScrolled;
 
-  // Header position: 
-  // - If stickyAnnouncement: header is sticky at top-8 (below announcement bar)
-  // - If homepage (not stickyAnnouncement): header moves to top-0 when scrolled
   const headerTopClass = stickyAnnouncement 
-    ? 'sticky top-8' 
-    : `fixed ${isScrolled ? 'top-0' : 'top-8'}`;
+    ? 'sticky top-0 md:top-8' 
+    : `fixed ${isScrolled ? 'top-0' : 'top-0 md:top-8'}`;
 
   return (
     <>
+      <SearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
       <AnnouncementBar isSticky={stickyAnnouncement} />
       <header className={`${headerTopClass} left-0 right-0 z-40 transition-all duration-300 ${isScrolled || forceLight ? 'bg-white/95 backdrop-blur-sm shadow-sm' : 'bg-transparent'}`}>
         {/* Ghana Flag Border - 3 lines */}
@@ -72,10 +191,31 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
           <div className="h-[1.5px] flex-1 bg-ghana-green"></div>
         </div>
         
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="flex items-center justify-between h-20">
-            {/* Left - Navigation (with gap before logo) */}
-            <nav className="hidden md:flex items-center gap-5 pr-16">
+        <div className="max-w-7xl mx-auto px-4 md:px-12">
+          {/* Mobile Header */}
+          <div className="md:hidden flex items-center justify-between h-14">
+            {/* Left - Logo */}
+            <Link to="/" data-testid="logo-mobile">
+              <img 
+                src="https://customer-assets.emergentagent.com/job_f5f5b77d-4869-424b-bf9b-df9ab6eb583a/artifacts/nhldagq1_black%20star-01.svg" 
+                alt="Black Star" 
+                className={`w-8 h-8 transition-all ${useDarkText ? '' : 'invert'}`}
+              />
+            </Link>
+            {/* Right - Menu Toggle */}
+            <button 
+              className={`${useDarkText ? 'text-black' : 'text-white'}`} 
+              onClick={() => setIsMenuOpen(!isMenuOpen)} 
+              data-testid="mobile-menu-toggle"
+            >
+              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
+
+          {/* Desktop Header */}
+          <div className="hidden md:flex items-center justify-between h-20">
+            {/* Left - Navigation */}
+            <nav className="flex items-center gap-5 pr-16">
               <Link to="/products?category=official-tournament" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-official">
                 Tournament
               </Link>
@@ -93,7 +233,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
               </Link>
             </nav>
 
-            {/* Center - Logo Icon Only */}
+            {/* Center - Logo */}
             <Link to="/" className="absolute left-1/2 -translate-x-1/2" data-testid="logo">
               <img 
                 src="https://customer-assets.emergentagent.com/job_f5f5b77d-4869-424b-bf9b-df9ab6eb583a/artifacts/nhldagq1_black%20star-01.svg" 
@@ -102,37 +242,17 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
               />
             </Link>
 
-            {/* Right - Search & Icons (with gap after logo) */}
+            {/* Right - Icons */}
             <div className={`flex items-center gap-4 pl-16 ${useDarkText ? 'text-black' : 'text-white'}`}>
-              {/* Search */}
-              <div className="relative">
-                {searchOpen ? (
-                  <form onSubmit={handleSearch} className="flex items-center">
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search jerseys..."
-                      className="w-40 md:w-56 px-3 py-2 text-sm font-body bg-white text-black border border-black/20 focus:border-ashanti-gold outline-none"
-                      autoFocus
-                      data-testid="search-input"
-                    />
-                    <button type="button" onClick={() => setSearchOpen(false)} className="ml-2">
-                      <X size={18} />
-                    </button>
-                  </form>
-                ) : (
-                  <button onClick={() => setSearchOpen(true)} className="hover:text-ashanti-gold transition-colors" data-testid="search-btn">
-                    <Search size={20} />
-                  </button>
-                )}
-              </div>
+              <button onClick={() => setSearchOpen(true)} className="hover:text-ashanti-gold transition-colors" data-testid="search-btn">
+                <Search size={20} />
+              </button>
 
               {user ? (
                 <div className="relative group">
                   <button className="flex items-center gap-2 font-body text-sm font-semibold" data-testid="user-menu">
                     <User size={20} />
-                    <span className="hidden md:block">{user.name?.split(' ')[0]}</span>
+                    <span className="hidden lg:block">{user.name?.split(' ')[0]}</span>
                   </button>
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-black/10 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                     <Link to="/dashboard" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-dashboard">
@@ -172,30 +292,13 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                   </span>
                 )}
               </Link>
-              <button className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} data-testid="mobile-menu-toggle">
-                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
             </div>
           </div>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Menu Dropdown */}
         {isMenuOpen && (
           <div className="md:hidden bg-white border-t border-black/10">
-            {/* Mobile Search */}
-            <form onSubmit={handleSearch} className="px-6 py-4 border-b border-black/10">
-              <div className="flex items-center gap-2">
-                <Search size={18} className="text-muted-text" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search jerseys..."
-                  className="flex-1 px-2 py-2 text-sm font-body bg-transparent focus:outline-none"
-                  data-testid="mobile-search-input"
-                />
-              </div>
-            </form>
             <nav className="flex flex-col py-4">
               <Link to="/products?category=official-tournament" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 Tournament
@@ -212,9 +315,11 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
               <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 Designers
               </Link>
-              <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold" onClick={() => setIsMenuOpen(false)}>
-                List Your Jersey
-              </Link>
+              <div className="border-t border-black/10 mt-2 pt-2">
+                <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
+                  List Your Jersey
+                </Link>
+              </div>
             </nav>
           </div>
         )}
@@ -304,7 +409,12 @@ const Footer = () => {
         </div>
 
         <div className="border-t border-white/10 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="font-body text-xs text-white/40">© 2024 Black Star Threads. All rights reserved.</p>
+          <p className="font-body text-xs text-white/40">
+            © 2025 Ghanajersey.co All rights reserved. Built and Managed by{" "}
+            <a href="https://www.nitlimited.com/" target="_blank" rel="noopener noreferrer" className="text-ashanti-gold hover:text-white transition-colors">
+              Nitlimited
+            </a>
+          </p>
           <div className="flex gap-6">
             <Link to="/terms" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
             <Link to="/privacy" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
@@ -312,6 +422,8 @@ const Footer = () => {
           </div>
         </div>
       </div>
+      {/* Extra padding for mobile bottom nav */}
+      <div className="md:hidden h-16"></div>
     </footer>
   );
 };
@@ -755,9 +867,10 @@ const LandingPage = () => {
       </section>
 
       <Footer />
+      <MobileBottomNav />
     </div>
   );
 };
 
 export default LandingPage;
-export { Header, Footer, ProductCard, Marquee };
+export { Header, Footer, ProductCard, Marquee, MobileBottomNav, SearchOverlay };

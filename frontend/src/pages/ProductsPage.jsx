@@ -4,7 +4,7 @@ import { Filter, X, ChevronDown, Star, Grid, List } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Slider } from "../components/ui/slider";
-import { Header, Footer, ProductCard } from "./LandingPage";
+import { Header, Footer, ProductCard, MobileBottomNav } from "./LandingPage";
 import { API } from "../App";
 import axios from "axios";
 
@@ -267,6 +267,7 @@ const ProductsPage = () => {
       </div>
 
       <Footer />
+      <MobileBottomNav />
     </div>
   );
 };

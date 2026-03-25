@@ -167,18 +167,23 @@ const CartProvider = ({ children }) => {
     fetchCart();
   }, [fetchCart]);
 
-  const addToCart = async (productId, quantity, size) => {
+  const addToCart = async (productId, quantity, size, customization = null) => {
     if (!token) {
       toast.error("Please login to add items to cart");
       return false;
     }
 
     try {
-      await axios.post(`${API}/cart/add`, { product_id: productId, quantity, size }, {
+      await axios.post(`${API}/cart/add`, { 
+        product_id: productId, 
+        quantity, 
+        size,
+        customization 
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       await fetchCart();
-      toast.success("Added to cart");
+      toast.success(customization ? "Customized jersey added to cart" : "Added to cart");
       return true;
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to add to cart");

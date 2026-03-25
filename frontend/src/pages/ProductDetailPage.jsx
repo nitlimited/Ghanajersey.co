@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Star, Heart, Minus, Plus, ChevronLeft, Share2, ThumbsUp } from "lucide-react";
+import { Star, Heart, Minus, Plus, ChevronLeft, Share2, ThumbsUp, Shirt } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Header, Footer, ProductCard } from "./LandingPage";
+import { Header, Footer, ProductCard, MobileBottomNav } from "./LandingPage";
 import { useAuth, useCart, API } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
@@ -21,6 +23,10 @@ const ProductDetailPage = () => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [voteCount, setVoteCount] = useState(0);
   const [hasVoted, setHasVoted] = useState(false);
+  // Customization state
+  const [wantsCustomization, setWantsCustomization] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customNumber, setCustomNumber] = useState("");
   const { user, token } = useAuth();
   const { addToCart } = useCart();
 
@@ -106,7 +112,23 @@ const ProductDetailPage = () => {
       toast.error("Please select a size");
       return;
     }
-    await addToCart(productId, quantity, selectedSize);
+    
+    // Validate customization if selected
+    if (wantsCustomization && product?.allows_customization) {
+      if (!customName.trim() && !customNumber.trim()) {
+        toast.error("Please enter a name or number for customization");
+        return;
+      }
+    }
+    
+    // Include customization data in cart
+    const customization = wantsCustomization && product?.allows_customization ? {
+      name: customName.trim().toUpperCase(),
+      number: customNumber.trim(),
+      price: product.customization_price || 0
+    } : null;
+    
+    await addToCart(productId, quantity, selectedSize, customization);
   };
 
   const handleAddToWishlist = async () => {
@@ -289,6 +311,75 @@ const ProductDetailPage = () => {
               </div>
             </div>
 
+            {/* Customization Option */}
+            {product.allows_customization && (
+              <div className="border border-ashanti-gold/30 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <Shirt size={20} className="text-ashanti-gold" />
+                    <div>
+                      <h4 className="font-body text-sm font-semibold">Personalize Your Jersey</h4>
+                      <p className="font-body text-xs text-muted-text">Add your name and number on the back</p>
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={wantsCustomization}
+                      onChange={(e) => setWantsCustomization(e.target.checked)}
+                      className="w-5 h-5 accent-ashanti-gold"
+                      data-testid="customization-toggle"
+                    />
+                    <span className="font-body text-sm text-ashanti-gold font-semibold">
+                      +{product.currency} {(product.customization_price || 0).toFixed(2)}
+                    </span>
+                  </label>
+                </div>
+                
+                {wantsCustomization && (
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-black/10">
+                    <div>
+                      <Label className="font-body text-xs uppercase tracking-wider text-muted-text">Name on Back</Label>
+                      <Input
+                        value={customName}
+                        onChange={(e) => setCustomName(e.target.value.slice(0, 15))}
+                        placeholder="MENSAH"
+                        maxLength={15}
+                        className="mt-2 uppercase font-body"
+                        data-testid="custom-name-input"
+                      />
+                      <p className="font-body text-[10px] text-muted-text mt-1">{customName.length}/15 characters</p>
+                    </div>
+                    <div>
+                      <Label className="font-body text-xs uppercase tracking-wider text-muted-text">Number on Back</Label>
+                      <Input
+                        value={customNumber}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 2);
+                          setCustomNumber(val);
+                        }}
+                        placeholder="10"
+                        maxLength={2}
+                        className="mt-2 font-body text-center text-lg"
+                        data-testid="custom-number-input"
+                      />
+                      <p className="font-body text-[10px] text-muted-text mt-1">1-99</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Total Price Display */}
+            {wantsCustomization && product.allows_customization && (
+              <div className="flex items-center justify-between p-4 bg-bone-white">
+                <span className="font-body text-sm">Jersey + Customization</span>
+                <span className="font-body text-xl font-semibold">
+                  {product.currency} {((product.price + (product.customization_price || 0)) * quantity).toFixed(2)}
+                </span>
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex gap-4 pt-4">
               <Button
@@ -425,6 +516,7 @@ const ProductDetailPage = () => {
       )}
 
       <Footer />
+      <MobileBottomNav />
     </div>
   );
 };
