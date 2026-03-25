@@ -663,26 +663,45 @@ async def get_categories():
     ]
 
 # Voting endpoints
+class VoteRequest(BaseModel):
+    device_fingerprint: Optional[str] = None
+
 @api_router.post("/products/{product_id}/vote")
-async def vote_for_product(product_id: str, request: Request):
-    # Get voter IP for uniqueness (simple implementation)
+async def vote_for_product(product_id: str, request: Request, vote_data: Optional[VoteRequest] = None):
+    # Get voter IP for uniqueness
     voter_ip = request.client.host if request.client else "unknown"
     
-    # Check if already voted
-    existing_vote = await db.votes.find_one({
+    # Get device fingerprint if provided (for better duplicate detection)
+    device_fingerprint = vote_data.device_fingerprint if vote_data else None
+    
+    # Check if already voted by IP
+    existing_vote_ip = await db.votes.find_one({
         "product_id": product_id,
         "voter_ip": voter_ip
     })
     
-    if existing_vote:
+    if existing_vote_ip:
         raise HTTPException(status_code=400, detail="You have already voted for this jersey")
     
+    # Check if already voted by device fingerprint (if provided)
+    if device_fingerprint:
+        existing_vote_fp = await db.votes.find_one({
+            "product_id": product_id,
+            "device_fingerprint": device_fingerprint
+        })
+        if existing_vote_fp:
+            raise HTTPException(status_code=400, detail="You have already voted for this jersey")
+    
     # Record vote
-    await db.votes.insert_one({
+    vote_doc = {
         "product_id": product_id,
         "voter_ip": voter_ip,
         "created_at": datetime.now(timezone.utc).isoformat()
-    })
+    }
+    if device_fingerprint:
+        vote_doc["device_fingerprint"] = device_fingerprint
+    
+    await db.votes.insert_one(vote_doc)
     
     # Update product vote count
     await db.products.update_one(
@@ -691,6 +710,31 @@ async def vote_for_product(product_id: str, request: Request):
     )
     
     return {"message": "Vote recorded successfully"}
+
+@api_router.get("/products/{product_id}/check-vote")
+async def check_vote_status(product_id: str, request: Request, device_fingerprint: Optional[str] = None):
+    """Check if user has already voted for this product"""
+    voter_ip = request.client.host if request.client else "unknown"
+    
+    # Check by IP
+    existing_vote_ip = await db.votes.find_one({
+        "product_id": product_id,
+        "voter_ip": voter_ip
+    })
+    
+    if existing_vote_ip:
+        return {"has_voted": True}
+    
+    # Check by device fingerprint if provided
+    if device_fingerprint:
+        existing_vote_fp = await db.votes.find_one({
+            "product_id": product_id,
+            "device_fingerprint": device_fingerprint
+        })
+        if existing_vote_fp:
+            return {"has_voted": True}
+    
+    return {"has_voted": False}
 
 @api_router.get("/products/{product_id}/votes")
 async def get_product_votes(product_id: str):

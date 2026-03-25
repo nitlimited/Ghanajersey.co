@@ -24,6 +24,16 @@ const ProductDetailPage = () => {
   const { user, token } = useAuth();
   const { addToCart } = useCart();
 
+  // Generate or retrieve device fingerprint for voting
+  const getDeviceFingerprint = () => {
+    let fingerprint = localStorage.getItem('bst_device_fp');
+    if (!fingerprint) {
+      fingerprint = `fp_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      localStorage.setItem('bst_device_fp', fingerprint);
+    }
+    return fingerprint;
+  };
+
   useEffect(() => {
     const fetchProduct = async () => {
       setLoading(true);
@@ -33,6 +43,17 @@ const ProductDetailPage = () => {
         setVoteCount(response.data.vote_count || 0);
         if (response.data.sizes?.length > 0) {
           setSelectedSize(response.data.sizes[0]);
+        }
+
+        // Check if user has already voted (using device fingerprint)
+        const fingerprint = getDeviceFingerprint();
+        try {
+          const voteCheckRes = await axios.get(`${API}/products/${productId}/check-vote?device_fingerprint=${fingerprint}`);
+          setHasVoted(voteCheckRes.data.has_voted);
+        } catch (e) {
+          // If check fails, also check localStorage
+          const votedProducts = JSON.parse(localStorage.getItem('bst_voted_products') || '[]');
+          setHasVoted(votedProducts.includes(productId));
         }
 
         // Fetch related products (same category)
@@ -57,9 +78,18 @@ const ProductDetailPage = () => {
 
   const handleVote = async () => {
     try {
-      await axios.post(`${API}/products/${productId}/vote`);
+      const fingerprint = getDeviceFingerprint();
+      await axios.post(`${API}/products/${productId}/vote`, { device_fingerprint: fingerprint });
       setVoteCount(prev => prev + 1);
       setHasVoted(true);
+      
+      // Also store in localStorage as backup
+      const votedProducts = JSON.parse(localStorage.getItem('bst_voted_products') || '[]');
+      if (!votedProducts.includes(productId)) {
+        votedProducts.push(productId);
+        localStorage.setItem('bst_voted_products', JSON.stringify(votedProducts));
+      }
+      
       toast.success("Vote recorded! Thanks for voting.");
     } catch (error) {
       if (error.response?.status === 400) {

@@ -1,16 +1,32 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useAuth, useCart, API } from "../App";
 import axios from "axios";
+
+// Announcement Bar Component
+const AnnouncementBar = () => {
+  return (
+    <div className="bg-black text-white py-2 px-4">
+      <div className="max-w-7xl mx-auto flex items-center justify-center">
+        <p className="font-body text-xs md:text-sm tracking-wide text-center">
+          <span className="text-ashanti-gold font-semibold">FREE SHIPPING</span> on orders over $100 | Use code <span className="text-ashanti-gold font-semibold">GHANA10</span> for 10% off
+        </p>
+      </div>
+    </div>
+  );
+};
 
 // Header Component
 const Header = ({ forceLight = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const { user, logout } = useAuth();
   const { cart } = useCart();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,128 +36,181 @@ const Header = ({ forceLight = false }) => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+      setSearchOpen(false);
+    }
+  };
+
   // Determine if we should use dark (black) text
   const useDarkText = forceLight || isScrolled;
 
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled || forceLight ? 'bg-white/95 backdrop-blur-sm' : 'bg-transparent'}`}>
-      {/* Ghana Flag Border - 3 lines */}
-      <div className="flex w-full">
-        <div className="h-[1.5px] flex-1 bg-ghana-red"></div>
-      </div>
-      <div className="flex w-full">
-        <div className="h-[1.5px] flex-1 bg-ashanti-gold"></div>
-      </div>
-      <div className="flex w-full">
-        <div className="h-[1.5px] flex-1 bg-ghana-green"></div>
-      </div>
-      
-      <div className="max-w-7xl mx-auto px-6 md:px-12">
-        <div className="flex items-center justify-between h-20">
-          {/* Left - Navigation */}
-          <nav className="hidden md:flex items-center gap-6">
-            <Link to="/products?category=official-tournament" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-official">
-              Official Tournament
-            </Link>
-            <Link to="/products?category=streetwear" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-streetwear">
-              Streetwear
-            </Link>
-            <Link to="/products?category=fan" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-fan">
-              Fan
-            </Link>
-            <Link to="/products?category=retro" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-retro">
-              Retro Designs
-            </Link>
-            <Link to="/products?category=creative-designer" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
-              Creative Designer
-            </Link>
-          </nav>
-
-          {/* Center - Logo Icon Only */}
-          <Link to="/" className="absolute left-1/2 -translate-x-1/2" data-testid="logo">
-            <img 
-              src="https://customer-assets.emergentagent.com/job_f5f5b77d-4869-424b-bf9b-df9ab6eb583a/artifacts/nhldagq1_black%20star-01.svg" 
-              alt="Black Star" 
-              className={`w-10 h-10 transition-all ${useDarkText ? '' : 'invert'}`}
-            />
-          </Link>
-
-          {/* Right - Icons */}
-          <div className={`flex items-center gap-4 ${useDarkText ? 'text-black' : 'text-white'}`}>
-            {user ? (
-              <div className="relative group">
-                <button className="flex items-center gap-2 font-body text-sm font-semibold" data-testid="user-menu">
-                  <User size={20} />
-                  <span className="hidden md:block">{user.name?.split(' ')[0]}</span>
-                </button>
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-black/10 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                  <Link to="/dashboard" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-dashboard">
-                    My Orders
-                  </Link>
-                  <Link to="/wishlist" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-wishlist">
-                    Wishlist
-                  </Link>
-                  {user.role === "vendor" && (
-                    <Link to="/vendor" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-vendor">
-                      Vendor Dashboard
-                    </Link>
-                  )}
-                  {user.role === "admin" && (
-                    <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
-                      Admin Dashboard
-                    </Link>
-                  )}
-                  <button onClick={logout} className="w-full text-left px-4 py-2 hover:bg-black/5 font-body text-sm text-ghana-red" data-testid="btn-logout">
-                    Logout
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <Link to="/auth" className="hover:text-ashanti-gold transition-colors" data-testid="link-auth">
-                <User size={20} />
+    <>
+      <AnnouncementBar />
+      <header className={`fixed top-8 left-0 right-0 z-50 transition-all duration-300 ${isScrolled || forceLight ? 'bg-white/95 backdrop-blur-sm shadow-sm' : 'bg-transparent'}`}>
+        {/* Ghana Flag Border - 3 lines */}
+        <div className="flex w-full">
+          <div className="h-[1.5px] flex-1 bg-ghana-red"></div>
+        </div>
+        <div className="flex w-full">
+          <div className="h-[1.5px] flex-1 bg-ashanti-gold"></div>
+        </div>
+        <div className="flex w-full">
+          <div className="h-[1.5px] flex-1 bg-ghana-green"></div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="flex items-center justify-between h-20">
+            {/* Left - Navigation (with gap before logo) */}
+            <nav className="hidden md:flex items-center gap-5 pr-16">
+              <Link to="/products?category=official-tournament" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-official">
+                Tournament
               </Link>
-            )}
-            <Link to="/wishlist" className="hover:text-ashanti-gold transition-colors" data-testid="link-wishlist-icon">
-              <Heart size={20} />
+              <Link to="/products?category=streetwear" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-streetwear">
+                Streetwear
+              </Link>
+              <Link to="/products?category=fan" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-fan">
+                Fan
+              </Link>
+              <Link to="/products?category=retro" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-retro">
+                Retro
+              </Link>
+              <Link to="/products?category=creative-designer" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
+                Designers
+              </Link>
+            </nav>
+
+            {/* Center - Logo Icon Only */}
+            <Link to="/" className="absolute left-1/2 -translate-x-1/2" data-testid="logo">
+              <img 
+                src="https://customer-assets.emergentagent.com/job_f5f5b77d-4869-424b-bf9b-df9ab6eb583a/artifacts/nhldagq1_black%20star-01.svg" 
+                alt="Black Star" 
+                className={`w-10 h-10 transition-all ${useDarkText ? '' : 'invert'}`}
+              />
             </Link>
-            <Link to="/cart" className="relative hover:text-ashanti-gold transition-colors" data-testid="link-cart">
-              <ShoppingBag size={20} />
-              {cart.items.length > 0 && (
-                <span className="absolute -top-2 -right-2 w-5 h-5 bg-ashanti-gold text-black text-xs flex items-center justify-center font-semibold">
-                  {cart.items.length}
-                </span>
+
+            {/* Right - Search & Icons (with gap after logo) */}
+            <div className={`flex items-center gap-4 pl-16 ${useDarkText ? 'text-black' : 'text-white'}`}>
+              {/* Search */}
+              <div className="relative">
+                {searchOpen ? (
+                  <form onSubmit={handleSearch} className="flex items-center">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search jerseys..."
+                      className="w-40 md:w-56 px-3 py-2 text-sm font-body bg-white text-black border border-black/20 focus:border-ashanti-gold outline-none"
+                      autoFocus
+                      data-testid="search-input"
+                    />
+                    <button type="button" onClick={() => setSearchOpen(false)} className="ml-2">
+                      <X size={18} />
+                    </button>
+                  </form>
+                ) : (
+                  <button onClick={() => setSearchOpen(true)} className="hover:text-ashanti-gold transition-colors" data-testid="search-btn">
+                    <Search size={20} />
+                  </button>
+                )}
+              </div>
+
+              {user ? (
+                <div className="relative group">
+                  <button className="flex items-center gap-2 font-body text-sm font-semibold" data-testid="user-menu">
+                    <User size={20} />
+                    <span className="hidden md:block">{user.name?.split(' ')[0]}</span>
+                  </button>
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-black/10 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                    <Link to="/dashboard" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-dashboard">
+                      My Orders
+                    </Link>
+                    <Link to="/wishlist" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-wishlist">
+                      Wishlist
+                    </Link>
+                    {user.role === "vendor" && (
+                      <Link to="/vendor" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-vendor">
+                        Vendor Dashboard
+                      </Link>
+                    )}
+                    {user.role === "admin" && (
+                      <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
+                        Admin Dashboard
+                      </Link>
+                    )}
+                    <button onClick={logout} className="w-full text-left px-4 py-2 hover:bg-black/5 font-body text-sm text-ghana-red" data-testid="btn-logout">
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <Link to="/auth" className="hover:text-ashanti-gold transition-colors" data-testid="link-auth">
+                  <User size={20} />
+                </Link>
               )}
-            </Link>
-            <button className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} data-testid="mobile-menu-toggle">
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+              <Link to="/wishlist" className="hover:text-ashanti-gold transition-colors" data-testid="link-wishlist-icon">
+                <Heart size={20} />
+              </Link>
+              <Link to="/cart" className="relative hover:text-ashanti-gold transition-colors" data-testid="link-cart">
+                <ShoppingBag size={20} />
+                {cart.items.length > 0 && (
+                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-ashanti-gold text-black text-xs flex items-center justify-center font-semibold">
+                    {cart.items.length}
+                  </span>
+                )}
+              </Link>
+              <button className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} data-testid="mobile-menu-toggle">
+                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Mobile Menu */}
-      {isMenuOpen && (
-        <div className="md:hidden bg-white border-t border-black/10">
-          <nav className="flex flex-col py-4">
-            <Link to="/products?category=official-tournament" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Official Tournament
-            </Link>
-            <Link to="/products?category=streetwear" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Streetwear
-            </Link>
-            <Link to="/products?category=fan" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Fan
-            </Link>
-            <Link to="/products?category=retro" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Retro Designs
-            </Link>
-            <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Creative Designer
-            </Link>
-          </nav>
-        </div>
-      )}
-    </header>
+        {/* Mobile Menu */}
+        {isMenuOpen && (
+          <div className="md:hidden bg-white border-t border-black/10">
+            {/* Mobile Search */}
+            <form onSubmit={handleSearch} className="px-6 py-4 border-b border-black/10">
+              <div className="flex items-center gap-2">
+                <Search size={18} className="text-muted-text" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search jerseys..."
+                  className="flex-1 px-2 py-2 text-sm font-body bg-transparent focus:outline-none"
+                  data-testid="mobile-search-input"
+                />
+              </div>
+            </form>
+            <nav className="flex flex-col py-4">
+              <Link to="/products?category=official-tournament" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+                Tournament
+              </Link>
+              <Link to="/products?category=streetwear" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+                Streetwear
+              </Link>
+              <Link to="/products?category=fan" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+                Fan
+              </Link>
+              <Link to="/products?category=retro" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+                Retro
+              </Link>
+              <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+                Designers
+              </Link>
+              <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold" onClick={() => setIsMenuOpen(false)}>
+                List Your Jersey
+              </Link>
+            </nav>
+          </div>
+        )}
+      </header>
+    </>
   );
 };
 
@@ -165,7 +234,7 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto px-6 md:px-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
           {/* Brand */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-1">
             <div className="flex items-center gap-3 mb-6">
               <img 
                 src="https://customer-assets.emergentagent.com/job_f5f5b77d-4869-424b-bf9b-df9ab6eb583a/artifacts/nhldagq1_black%20star-01.svg" 
@@ -173,9 +242,14 @@ const Footer = () => {
                 className="w-10 h-10 invert"
               />
             </div>
-            <p className="font-body text-sm text-white/60 leading-relaxed max-w-md">
+            <p className="font-body text-sm text-white/60 leading-relaxed mb-6">
               Curated Ghanaian jerseys for the global citizen. For the love of country and culture.
             </p>
+            <Link to="/sell">
+              <Button className="bg-ashanti-gold text-black hover:bg-white font-body font-semibold text-sm" data-testid="footer-sell-btn">
+                List Your Jersey
+              </Button>
+            </Link>
           </div>
 
           {/* Links */}
@@ -183,10 +257,21 @@ const Footer = () => {
             <h4 className="font-heading text-sm tracking-wide mb-4">Shop</h4>
             <nav className="flex flex-col gap-2">
               <Link to="/products" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">All Jerseys</Link>
-              <Link to="/products?category=women" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Women</Link>
-              <Link to="/products?category=men" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Men</Link>
-              <Link to="/products?category=youth" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Youth</Link>
-              <Link to="/products?category=kids" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Kids</Link>
+              <Link to="/products?category=official-tournament" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Tournament</Link>
+              <Link to="/products?category=streetwear" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Streetwear</Link>
+              <Link to="/products?category=retro" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Retro</Link>
+              <Link to="/products?category=creative-designer" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Designers</Link>
+            </nav>
+          </div>
+
+          {/* Company */}
+          <div>
+            <h4 className="font-heading text-sm tracking-wide mb-4">Company</h4>
+            <nav className="flex flex-col gap-2">
+              <Link to="/sell" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Become a Seller</Link>
+              <Link to="/terms" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
+              <Link to="/privacy" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
+              <Link to="/compare" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Compare Jerseys</Link>
             </nav>
           </div>
 
@@ -242,23 +327,41 @@ const Marquee = () => {
 
 // Product Card Component
 const ProductCard = ({ product }) => {
+  const primaryImage = product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600";
+  const secondaryImage = product.images?.[1] || product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600";
+  
   return (
     <Link to={`/products/${product.product_id}`} className="group block" data-testid={`product-card-${product.product_id}`}>
       <div className="relative overflow-hidden border border-transparent hover:border-black transition-all duration-300">
-        <div className="aspect-[3/4] overflow-hidden bg-gray-100">
+        <div className="aspect-[3/4] overflow-hidden bg-gray-100 relative">
+          {/* Primary Image */}
           <img
-            src={product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600"}
+            src={primaryImage}
             alt={product.name}
-            className="w-full h-full object-cover grayscale-hover group-hover:scale-105 transition-all duration-500"
+            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 group-hover:opacity-0"
+          />
+          {/* Secondary Image (shown on hover) */}
+          <img
+            src={secondaryImage}
+            alt={`${product.name} alternate view`}
+            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100 group-hover:scale-105"
           />
         </div>
         {product.featured && (
-          <span className="absolute top-4 left-4 bg-ashanti-gold text-black px-3 py-1 font-body text-xs font-semibold tracking-wide">
+          <span className="absolute top-4 left-4 bg-ashanti-gold text-black px-3 py-1 font-body text-xs font-semibold tracking-wide z-10">
             Featured
           </span>
         )}
-        <div className="p-4">
-          <h3 className="font-heading text-sm tracking-wide group-hover:text-ashanti-gold transition-colors">
+        {product.is_limited_edition && (
+          <span className="absolute top-4 right-4 bg-ghana-red text-white px-3 py-1 font-body text-xs font-semibold tracking-wide z-10">
+            Limited
+          </span>
+        )}
+        <div className="p-4 bg-white">
+          <p className="font-body text-xs text-muted-text uppercase tracking-wider mb-1">
+            {product.vendor_name || product.category?.replace("-", " ")}
+          </p>
+          <h3 className="font-heading text-sm tracking-wide group-hover:text-ashanti-gold transition-colors line-clamp-1">
             {product.name}
           </h3>
           <div className="flex items-center justify-between mt-2">
