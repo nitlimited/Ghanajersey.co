@@ -7,140 +7,166 @@ Build a modern, scalable international eCommerce web application focused on sell
 - **Frontend**: React 19 with Tailwind CSS, Shadcn UI components
 - **Backend**: FastAPI (Python) with MongoDB
 - **Authentication**: JWT + Emergent Google OAuth
-- **Payments**: Stripe (integrated), PayPal (mocked), Paystack (requires API key)
+- **Payments**: Stripe (integrated), PayPal (playbook ready), Paystack (requires API key)
 - **Hosting**: Emergent Platform
 
-## User Personas
+## User Roles & Credentials
 
-### Admin (Super Admin)
+### Admin
 - Email: easante@nitlimited.com
 - Password: admin123
-- Capabilities: Full marketplace control, approve/reject products, manage vendors, manage orders, view analytics
+- Capabilities: Full marketplace control, approve/reject products, manage vendors, view analytics, 15% commission tracking
 
-### Vendor (Jersey Producers)
-- Can register via /auth page selecting "Vendor" role
-- Capabilities: Upload products, manage inventory, view orders, update profile
+### Vendor
+- Email: vendor@blackstar.com
+- Password: vendor123
+- Capabilities: Upload products, manage inventory, update order status, view earnings, create promos
 
-### Customer (Buyers)
-- Can register via /auth page or Google OAuth
-- Capabilities: Browse, cart, wishlist, checkout, track orders
+### Customer
+- Register via /auth page or Google OAuth
+- Capabilities: Browse, cart, wishlist, checkout, track orders, vote for jerseys
 
 ## What's Been Implemented
 
-### MVP Launch
-- Complete backend API with 40+ endpoints
-- Landing page with hero, categories, featured products
-- Products listing page with filters (category, price, sort)
-- Product detail page with size selection, reviews
-- Shopping cart functionality
-- Checkout flow with Stripe integration
-- User authentication (JWT + Google OAuth)
-- Customer dashboard (orders, wishlist, account)
-- Vendor dashboard (products, orders, profile)
-- Admin dashboard (stats, pending approvals, orders, vendors, customers)
-- Sample products created and approved
-- Premium Afro-Futurist design with Cinzel + Outfit fonts
+### Core MVP
+- Multi-role authentication (Admin, Vendor, Customer) with JWT + Google OAuth
+- Product listing with approval workflow
+- Shopping cart and wishlist
+- Product detail pages with voting
+- Stripe payment integration
+- Premium Afro-Futurist design (Ghana flag colors)
 
-### Feature Update - Session 1
-- **Voting System**: Users can vote for their favorite jersey designs
-  - POST /api/products/{product_id}/vote (with device fingerprint)
-  - GET /api/products/{product_id}/check-vote (check if voted)
-  - GET /api/products/top-voted
-- **Homepage Redesign**: New sections added
-  - Vote banner section
-  - Popular Jerseys section
-  - Official Tournament Jerseys banner
-  - Designer Jerseys section
-  - Limited Editions banner
-  - Street Style Jerseys section
-  - Local Club Jersey banner
-  - Compare Jerseys CTA
-- **Sell Your Jersey Page** (/sell): Complete vendor recruitment page
-- **Legal Pages**: Terms and Privacy policy pages
-- **Product Comparison** (/compare): Side-by-side jersey comparison
-- **Product Detail Updates**: Voting functionality, "More from this designer" section
+### Phase 1: Enhanced Dashboards (December 2024)
 
-### Feature Update - Session 2
-- **Announcement Bar**: Top bar for promotions ("FREE SHIPPING on orders over $100 | Use code GHANA10 for 10% off")
-- **Simplified Menu**: Tournament | Streetwear | Fan | Retro | Designers
-- **Search Bar**: Header search with expandable input
-- **Footer Updates**: 
-  - "List Your Jersey" button prominently displayed
-  - Company section with Become a Seller, Terms, Privacy, Compare links
-  - Updated Shop links with category navigation
-- **Product Card Enhancements**:
-  - Shows vendor name/category above product name
-  - Second image appears on hover
-  - Limited edition badge support
-- **Enhanced Voting System**:
-  - Device fingerprint tracking (localStorage)
-  - IP-based duplicate prevention
-  - Check-vote endpoint for pre-load status
+#### Admin Dashboard Features
+- **Revenue Analytics**:
+  - Total Revenue tracking
+  - Platform Commission (15%) calculation
+  - Vendor Earnings Total
+  - Confirmed Deliveries count
+- **Vendors & Earnings Tab**:
+  - View all vendors with earnings breakdown
+  - See products per vendor ("View Products" button)
+  - Track pending vs paid payouts
+  - Commission/Net earnings per vendor
+- **Voting Panel** (View Only):
+  - Jersey Voting Statistics
+  - Current leader display
+  - Ranked list of all products by votes
+  - Admin cannot manipulate votes
+- **Orders Tab**:
+  - All orders with customer details
+  - Delivery confirmation tracking
+  - Order status management
+- **Pending Products Tab**:
+  - Approve/Reject new submissions
+- **Customers Tab**:
+  - View all registered customers
 
-## Pages
+#### Vendor Dashboard Features
+- **Financial Overview**:
+  - Total Revenue
+  - Platform Fee (15%)
+  - Net Earnings
+  - Pending Payout
+  - Paid Out
+- **Order Management**:
+  - View orders with customer name, address, phone
+  - See jersey size, quantity per order
+  - Update status: Processing → Shipped → Delivered → Cancelled
+  - Request delivery confirmation (email-ready)
+- **Product Management**:
+  - Add New Jersey (modal with form)
+  - Edit product details
+  - Upload images (front/back for hover)
+  - Set price, sizes, stock
+  - Duplicate product (for color variants)
+  - Pause/Unpause products
+  - Delete products
+- **Inventory Tracking**:
+  - Low stock alerts (≤5 items)
+  - Quick stock update
+- **Performance Insights**:
+  - Top selling jerseys
+  - Monthly sales
+  - Total votes on products
+- **Promos Tab**:
+  - Create discount codes
+  - Percentage or fixed amount
+  - Min purchase, max uses
+- **Support Tab**:
+  - Contact Admin
+  - Seller Guidelines
+  - Payout Policy
 
-| Route | Page | Description |
-|-------|------|-------------|
-| / | LandingPage | Homepage with hero, categories, sections |
-| /products | ProductsPage | Product listing with filters + search |
-| /products/:id | ProductDetailPage | Product detail with voting |
-| /cart | CartPage | Shopping cart |
-| /checkout | CheckoutPage | Checkout flow |
-| /wishlist | WishlistPage | User wishlist |
-| /auth | AuthPage | Login/Register |
-| /dashboard | CustomerDashboard | Customer orders |
-| /vendor | VendorDashboard | Vendor management |
-| /admin | AdminDashboard | Admin panel |
-| /sell | SellYourJerseyPage | Vendor recruitment |
-| /terms | TermsPage | Terms and conditions |
-| /privacy | PrivacyPage | Privacy policy |
-| /compare | ComparePage | Jersey comparison |
+### Delivery Confirmation Flow
+1. Vendor marks order as "Delivered"
+2. Vendor clicks "Request Confirmation"
+3. System generates confirmation link
+4. Customer clicks link to confirm receipt
+5. Confirmation unlocks vendor payout
+6. Admin sees confirmed deliveries count
 
 ## API Endpoints
 
-### Products & Voting
-- GET /api/products - List approved products (supports ?search=)
-- GET /api/products/featured - Featured products
-- GET /api/products/popular - Popular products
-- GET /api/products/top-voted - Most voted product
-- GET /api/products/{id} - Product detail
-- POST /api/products/{id}/vote - Vote for product (accepts device_fingerprint)
-- GET /api/products/{id}/check-vote - Check if user voted
-- GET /api/products/{id}/votes - Get vote count
+### Admin Routes
+- GET /api/admin/dashboard - Revenue stats with 15% commission
+- GET /api/admin/analytics/vendors - Detailed vendor earnings
+- GET /api/admin/vendors/{vendor_id}/products - Vendor's products
+- GET /api/admin/voting-stats - Voting statistics (view-only)
+- GET /api/admin/orders - All orders with confirmation status
+- PUT /api/admin/orders/{order_id}/status - Update order status
+- GET /api/admin/products/pending - Pending approvals
+- PUT /api/admin/products/{id}/approve - Approve/reject product
 
-### Authentication
-- POST /api/auth/register - Register new user
-- POST /api/auth/login - Login with email/password
-- POST /api/auth/session - Exchange OAuth session
-- GET /api/auth/me - Get current user
-- POST /api/auth/logout - Logout user
+### Vendor Routes
+- GET /api/vendor/dashboard - Comprehensive stats
+- GET /api/vendor/orders - Orders with customer details
+- PUT /api/vendor/orders/{order_id}/status - Update order status
+- POST /api/vendor/orders/{order_id}/send-confirmation - Request delivery confirmation
+- GET /api/vendor/products - All products
+- POST /api/vendor/products - Create product
+- PUT /api/vendor/products/{id} - Update product
+- DELETE /api/vendor/products/{id} - Delete product
+- POST /api/vendor/products/{id}/duplicate - Duplicate product
+- PUT /api/vendor/products/{id}/pause - Toggle pause
+- PUT /api/vendor/products/{id}/stock - Update stock
+- GET /api/vendor/promos - List promos
+- POST /api/vendor/promos - Create promo
+- DELETE /api/vendor/promos/{id} - Delete promo
+
+### Delivery Confirmation
+- GET /api/orders/{order_id}/confirm/{token} - Customer confirms delivery (link-based)
+
+## Current Product Catalog (6 Items)
+1. Ghana Away Jersey 2026 FIFA World Cup - $89.99 (Tournament)
+2. Ghana Home Jersey 2026 FIFA World Cup - $99.99 (Tournament)
+3. Ghana Home Jersey 2022 World Cup - $79.99 (Tournament)
+4. Ghana Black Star Mizizi '57 Designer Jersey - $85.00 (Designer)
+5. Ghana Retro Classic Jersey - $69.99 (Retro)
+6. Ghana Training Jersey Red - $55.00 (Streetwear)
 
 ## Prioritized Backlog
 
-### P0 (Critical)
-- None remaining
+### P0 (Critical) - Completed
+- ✅ Admin/Vendor dashboard enhancements
 
-### P1 (High Priority)
-- PayPal integration with API keys
-- Paystack integration with API keys
-- Image upload functionality with Object Storage
+### P1 (High Priority) - Next
+- Email integration (order confirmation, delivery confirmation)
+- PayPal payment integration
+- Paystack payment integration
+- Image upload via Object Storage
 
 ### P2 (Medium Priority)
-- Discount codes system (GHANA10 code implementation)
-- Email notifications (order confirmation, shipping updates)
+- Implement GHANA10 discount code at checkout
 - Order tracking with shipping providers
+- Inventory alerts via email
+- Performance insights (conversion rate, most viewed)
 
 ### P3 (Low Priority)
 - 360-degree product view
-- SEO meta tags optimization
-- Social sharing for products
 - Multi-language support
-
-## Test Credentials
-
-### Admin Account
-- Email: easante@nitlimited.com
-- Password: admin123
+- Mobile app
 
 ## Design System
 
@@ -155,9 +181,13 @@ Build a modern, scalable international eCommerce web application focused on sell
 - Headings: Cinzel (serif)
 - Body: Outfit (sans-serif)
 
-### Style
-- Sharp corners (0px radius)
-- Minimal gradients
-- High-contrast editorial aesthetic
-- Ghana flag border (red, yellow, green) in header
-- Announcement bar at top
+## Test Reports
+- /app/test_reports/iteration_4.json - Phase 1 dashboard testing (100% pass)
+- /app/backend/tests/test_admin_vendor_dashboards.py - Backend tests
+
+## Files of Reference
+- backend/server.py - All API endpoints
+- frontend/src/pages/AdminDashboard.jsx - Admin panel
+- frontend/src/pages/VendorDashboard.jsx - Vendor panel
+- frontend/src/pages/LandingPage.jsx - Homepage with Header/Footer
+- frontend/src/pages/ProductDetailPage.jsx - Product page with voting
