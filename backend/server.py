@@ -782,6 +782,10 @@ async def get_product(product_id: str):
     if isinstance(product.get('created_at'), str):
         product['created_at'] = datetime.fromisoformat(product['created_at'])
     
+    # Ensure vote_count exists for consistency
+    if 'vote_count' not in product:
+        product['vote_count'] = 0
+    
     # Get reviews
     reviews = await db.reviews.find(
         {"product_id": product_id},

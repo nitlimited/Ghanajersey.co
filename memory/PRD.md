@@ -40,10 +40,14 @@ Build a modern, scalable international eCommerce web application focused on sell
 - [x] Ghana-inspired premium aesthetic
 
 ### Should Have
-- [x] Product categories (clubs, national, retro, streetwear)
+- [x] Product categories (clubs, national, retro, streetwear, creative-designer, local-club)
 - [x] Product search and filtering
 - [x] Product reviews and ratings
 - [x] Newsletter subscription
+- [x] Product voting system
+- [x] Product comparison page
+- [x] Sell Your Jersey page (vendor recruitment)
+- [x] Legal pages (Terms, Privacy)
 - [ ] PayPal integration (requires API keys)
 - [ ] Paystack integration (requires API keys)
 - [ ] Image upload functionality (deferred)
@@ -52,7 +56,8 @@ Build a modern, scalable international eCommerce web application focused on sell
 - [ ] Discount codes and promotions
 - [ ] Email notifications
 - [ ] Order tracking with shipping providers
-- [ ] SEO optimization
+- [ ] SEO optimization (partial - meta tags added)
+- [ ] 360-degree product view
 - [ ] Mobile app (API-ready architecture)
 
 ## What's Been Implemented
@@ -71,6 +76,38 @@ Build a modern, scalable international eCommerce web application focused on sell
 - Sample products created and approved
 - Premium Afro-Futurist design with Cinzel + Outfit fonts
 
+### 2024-12 - Feature Update
+- **Voting System**: Users can vote for their favorite jersey designs
+  - POST /api/products/{product_id}/vote
+  - GET /api/products/top-voted
+  - Vote count displayed on product detail page with Vote button
+- **Homepage Redesign**: New sections added
+  - Vote banner section
+  - Popular Jerseys section
+  - Official Tournament Jerseys banner
+  - Designer Jerseys section
+  - Limited Editions banner
+  - Street Style Jerseys section
+  - Local Club Jersey banner
+  - Compare Jerseys CTA
+- **Sell Your Jersey Page** (/sell): Complete vendor recruitment page
+  - How It Works steps
+  - Payment information (15% commission)
+  - Example earnings calculator
+  - Listing requirements
+- **Legal Pages**: Terms and Privacy policy pages
+  - /terms - Full terms and conditions
+  - /privacy - Complete privacy policy
+- **Product Comparison** (/compare): Side-by-side jersey comparison
+  - Select two jerseys to compare
+  - Comparison table with specs
+  - Add to cart from comparison view
+- **Product Detail Updates**:
+  - Voting functionality with real-time updates
+  - "More from this designer" section
+  - Designer name displayed
+- **Footer Updates**: Links to Terms and Privacy pages
+
 ## API Endpoints
 
 ### Authentication
@@ -83,8 +120,17 @@ Build a modern, scalable international eCommerce web application focused on sell
 ### Products
 - GET /api/products - List approved products
 - GET /api/products/featured - Featured products
+- GET /api/products/popular - Popular products
+- GET /api/products/top-voted - Most voted product
 - GET /api/products/categories - Product categories
+- GET /api/products/by-category/{category} - Products by category
 - GET /api/products/{id} - Product detail
+- POST /api/products/{id}/vote - Vote for product
+- GET /api/products/{id}/votes - Get vote count
+
+### Vendor (Public)
+- GET /api/vendor/{vendor_id}/products - Vendor's public products
+- GET /api/vendor/{vendor_id}/public - Vendor's public profile
 
 ### Cart & Wishlist
 - GET /api/cart - Get user cart
@@ -103,7 +149,7 @@ Build a modern, scalable international eCommerce web application focused on sell
 - POST /api/payments/stripe/checkout - Create Stripe checkout
 - GET /api/payments/stripe/status/{session_id} - Check payment status
 
-### Vendor Routes
+### Vendor Routes (Authenticated)
 - GET /api/vendor/products - Vendor's products
 - POST /api/vendor/products - Create product
 - PUT /api/vendor/products/{id} - Update product
@@ -118,6 +164,25 @@ Build a modern, scalable international eCommerce web application focused on sell
 - GET /api/admin/vendors - All vendors
 - GET /api/admin/orders - All orders
 - GET /api/admin/customers - All customers
+
+## Pages
+
+| Route | Page | Description |
+|-------|------|-------------|
+| / | LandingPage | Homepage with hero, categories, sections |
+| /products | ProductsPage | Product listing with filters |
+| /products/:id | ProductDetailPage | Product detail with voting |
+| /cart | CartPage | Shopping cart |
+| /checkout | CheckoutPage | Checkout flow |
+| /wishlist | WishlistPage | User wishlist |
+| /auth | AuthPage | Login/Register |
+| /dashboard | CustomerDashboard | Customer orders |
+| /vendor | VendorDashboard | Vendor management |
+| /admin | AdminDashboard | Admin panel |
+| /sell | SellYourJerseyPage | Vendor recruitment |
+| /terms | TermsPage | Terms and conditions |
+| /privacy | PrivacyPage | Privacy policy |
+| /compare | ComparePage | Jersey comparison |
 
 ## Prioritized Backlog
 
@@ -134,21 +199,13 @@ Build a modern, scalable international eCommerce web application focused on sell
 - Email notifications (order confirmation, shipping updates)
 - Order tracking with shipping providers
 - Vendor profile customization
+- 360-degree product view
 
 ### P3 (Low Priority)
 - SEO meta tags optimization
 - Social sharing for products
 - Advanced analytics dashboard
 - Multi-language support
-
-## Next Tasks
-
-1. **Image Storage**: Integrate Emergent Object Storage for product images
-2. **PayPal Keys**: Get PayPal API keys and enable full integration
-3. **Paystack Keys**: Get Paystack API keys for African payments
-4. **Email Notifications**: Set up email service for order confirmations
-5. **Discount Codes**: Implement promotional code system
-6. **SEO Optimization**: Add meta tags, structured data
 
 ## Test Credentials
 
@@ -164,7 +221,7 @@ Build a modern, scalable international eCommerce web application focused on sell
 
 ### Colors
 - Primary: #000000 (Black)
-- Secondary: #D4AF37 (Ashanti Gold)
+- Secondary: #fed506 (Ashanti Gold)
 - Accent Red: #CE1126 (Ghana Red)
 - Accent Green: #006B3F (Ghana Green)
 - Background: #F9F9F7 (Bone White)
@@ -177,3 +234,4 @@ Build a modern, scalable international eCommerce web application focused on sell
 - Sharp corners (0px radius)
 - Minimal gradients
 - High-contrast editorial aesthetic
+- Ghana flag border (red, yellow, green) in header
