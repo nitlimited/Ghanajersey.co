@@ -17,6 +17,10 @@ import CustomerDashboard from "./pages/CustomerDashboard";
 import VendorDashboard from "./pages/VendorDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import WishlistPage from "./pages/WishlistPage";
+import SellYourJerseyPage from "./pages/SellYourJerseyPage";
+import TermsPage from "./pages/TermsPage";
+import PrivacyPage from "./pages/PrivacyPage";
+import ComparePage from "./pages/ComparePage";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -301,6 +305,10 @@ function AppRouter() {
           <OrderSuccessPage />
         </ProtectedRoute>
       } />
+      <Route path="/sell" element={<SellYourJerseyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/compare" element={<ComparePage />} />
     </Routes>
   );
 }

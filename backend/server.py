@@ -93,11 +93,13 @@ class ProductCreate(BaseModel):
     description: str
     price: float
     currency: str = "USD"
-    category: str  # clubs, national, retro, streetwear
+    category: str  # official-tournament, streetwear, fan, retro, creative-designer, local-club
+    jersey_type: str = "fan"  # original, fan
     sizes: List[str]
     stock: int
     images: List[str]
     tags: Optional[List[str]] = []
+    is_limited_edition: bool = False
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -105,10 +107,12 @@ class ProductUpdate(BaseModel):
     price: Optional[float] = None
     currency: Optional[str] = None
     category: Optional[str] = None
+    jersey_type: Optional[str] = None
     sizes: Optional[List[str]] = None
     stock: Optional[int] = None
     images: Optional[List[str]] = None
     tags: Optional[List[str]] = None
+    is_limited_edition: Optional[bool] = None
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -120,14 +124,17 @@ class ProductResponse(BaseModel):
     price: float
     currency: str
     category: str
+    jersey_type: str = "fan"
     sizes: List[str]
     stock: int
     images: List[str]
     tags: List[str]
     status: str  # pending, approved, rejected
     featured: bool = False
+    is_limited_edition: bool = False
     rating: float = 0.0
     review_count: int = 0
+    vote_count: int = 0
     created_at: datetime
 
 # Cart Models
@@ -521,6 +528,7 @@ async def create_product(product: ProductCreate, user: dict = Depends(get_vendor
         "featured": False,
         "rating": 0.0,
         "review_count": 0,
+        "vote_count": 0,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -646,11 +654,120 @@ async def get_featured_products():
 @api_router.get("/products/categories")
 async def get_categories():
     return [
-        {"id": "clubs", "name": "Club Jerseys", "description": "Official and replica club jerseys"},
-        {"id": "national", "name": "National Team", "description": "Ghana Black Stars jerseys"},
-        {"id": "retro", "name": "Retro Collection", "description": "Classic and vintage designs"},
-        {"id": "streetwear", "name": "Streetwear", "description": "Modern casual football fashion"}
+        {"id": "official-tournament", "name": "Official Tournament", "description": "Original and fan tournament jerseys"},
+        {"id": "streetwear", "name": "Streetwear", "description": "Modern street style jerseys"},
+        {"id": "fan", "name": "Fan Jerseys", "description": "Fan-made tribute jerseys"},
+        {"id": "retro", "name": "Retro Designs", "description": "Classic and vintage designs"},
+        {"id": "creative-designer", "name": "Creative Designer", "description": "Unique designer collections"},
+        {"id": "local-club", "name": "Local Club", "description": "Support your local Ghanaian clubs"}
     ]
+
+# Voting endpoints
+@api_router.post("/products/{product_id}/vote")
+async def vote_for_product(product_id: str, request: Request):
+    # Get voter IP for uniqueness (simple implementation)
+    voter_ip = request.client.host if request.client else "unknown"
+    
+    # Check if already voted
+    existing_vote = await db.votes.find_one({
+        "product_id": product_id,
+        "voter_ip": voter_ip
+    })
+    
+    if existing_vote:
+        raise HTTPException(status_code=400, detail="You have already voted for this jersey")
+    
+    # Record vote
+    await db.votes.insert_one({
+        "product_id": product_id,
+        "voter_ip": voter_ip,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Update product vote count
+    await db.products.update_one(
+        {"product_id": product_id},
+        {"$inc": {"vote_count": 1}}
+    )
+    
+    return {"message": "Vote recorded successfully"}
+
+@api_router.get("/products/{product_id}/votes")
+async def get_product_votes(product_id: str):
+    product = await db.products.find_one({"product_id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"vote_count": product.get("vote_count", 0)}
+
+@api_router.get("/products/top-voted")
+async def get_top_voted_product():
+    product = await db.products.find_one(
+        {"status": "approved"},
+        {"_id": 0},
+        sort=[("vote_count", -1)]
+    )
+    if product and isinstance(product.get('created_at'), str):
+        product['created_at'] = datetime.fromisoformat(product['created_at'])
+    return product
+
+@api_router.get("/products/by-category/{category}")
+async def get_products_by_category(category: str, limit: int = 8):
+    products = await db.products.find(
+        {"status": "approved", "category": category},
+        {"_id": 0}
+    ).limit(limit).to_list(limit)
+    
+    for product in products:
+        if isinstance(product.get('created_at'), str):
+            product['created_at'] = datetime.fromisoformat(product['created_at'])
+    
+    return products
+
+@api_router.get("/products/popular")
+async def get_popular_products(limit: int = 8):
+    products = await db.products.find(
+        {"status": "approved"},
+        {"_id": 0}
+    ).sort([("review_count", -1), ("rating", -1)]).limit(limit).to_list(limit)
+    
+    for product in products:
+        if isinstance(product.get('created_at'), str):
+            product['created_at'] = datetime.fromisoformat(product['created_at'])
+    
+    return products
+
+@api_router.get("/vendor/{vendor_id}/products")
+async def get_vendor_public_products(vendor_id: str, limit: int = 8):
+    products = await db.products.find(
+        {"status": "approved", "vendor_id": vendor_id},
+        {"_id": 0}
+    ).limit(limit).to_list(limit)
+    
+    for product in products:
+        if isinstance(product.get('created_at'), str):
+            product['created_at'] = datetime.fromisoformat(product['created_at'])
+    
+    return products
+
+@api_router.get("/vendor/{vendor_id}/public")
+async def get_vendor_public_profile(vendor_id: str):
+    user = await db.users.find_one(
+        {"user_id": vendor_id, "role": "vendor"},
+        {"_id": 0, "password": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="Designer not found")
+    
+    # Get product count
+    product_count = await db.products.count_documents({"vendor_id": vendor_id, "status": "approved"})
+    
+    return {
+        "vendor_id": user["user_id"],
+        "name": user.get("vendor_profile", {}).get("brand_name") if user.get("vendor_profile") else None or user["name"],
+        "description": user.get("vendor_profile", {}).get("description") if user.get("vendor_profile") else None,
+        "location": user.get("vendor_profile", {}).get("location") if user.get("vendor_profile") else None,
+        "product_count": product_count
+    }
 
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):

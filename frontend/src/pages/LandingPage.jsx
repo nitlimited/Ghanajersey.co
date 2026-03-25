@@ -40,20 +40,20 @@ const Header = ({ forceLight = false }) => {
         <div className="flex items-center justify-between h-20">
           {/* Left - Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="/products?category=women" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-women">
-              Women
+            <Link to="/products?category=official-tournament" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-official">
+              Official Tournament
             </Link>
-            <Link to="/products?category=men" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-men">
-              Men
+            <Link to="/products?category=streetwear" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-streetwear">
+              Streetwear
             </Link>
-            <Link to="/products?category=youth" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-youth">
-              Youth
+            <Link to="/products?category=fan" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-fan">
+              Fan
             </Link>
-            <Link to="/products?category=kids" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-kids">
-              Kids
+            <Link to="/products?category=retro" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-retro">
+              Retro Designs
             </Link>
-            <Link to="/products?category=lifestyle" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-lifestyle">
-              Lifestyle
+            <Link to="/products?category=creative-designer" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
+              Creative Designer
             </Link>
           </nav>
 
@@ -123,20 +123,20 @@ const Header = ({ forceLight = false }) => {
       {isMenuOpen && (
         <div className="md:hidden bg-white border-t border-black/10">
           <nav className="flex flex-col py-4">
-            <Link to="/products?category=women" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Women
+            <Link to="/products?category=official-tournament" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              Official Tournament
             </Link>
-            <Link to="/products?category=men" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Men
+            <Link to="/products?category=streetwear" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              Streetwear
             </Link>
-            <Link to="/products?category=youth" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Youth
+            <Link to="/products?category=fan" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              Fan
             </Link>
-            <Link to="/products?category=kids" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Kids
+            <Link to="/products?category=retro" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              Retro Designs
             </Link>
-            <Link to="/products?category=lifestyle" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-              Lifestyle
+            <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              Creative Designer
             </Link>
           </nav>
         </div>
@@ -210,9 +210,10 @@ const Footer = () => {
         </div>
 
         <div className="border-t border-white/10 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="font-body text-xs text-white/40">© 2024 All rights reserved.</p>
+          <p className="font-body text-xs text-white/40">© 2024 Black Star Threads. All rights reserved.</p>
           <div className="flex gap-6">
-            <span className="font-body text-xs text-white/40">Accra, Ghana</span>
+            <Link to="/terms" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
+            <Link to="/privacy" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
             <span className="font-body text-xs text-white/40">Ships Worldwide</span>
           </div>
         </div>
@@ -280,18 +281,24 @@ const ProductCard = ({ product }) => {
 // Landing Page
 const LandingPage = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [popularProducts, setPopularProducts] = useState([]);
+  const [topVotedProduct, setTopVotedProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { loginWithGoogle, user } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [productsRes, categoriesRes] = await Promise.all([
+        const [featuredRes, popularRes, topVotedRes, categoriesRes] = await Promise.all([
           axios.get(`${API}/products/featured`),
+          axios.get(`${API}/products/popular`),
+          axios.get(`${API}/products/top-voted`),
           axios.get(`${API}/products/categories`)
         ]);
-        setFeaturedProducts(productsRes.data);
+        setFeaturedProducts(featuredRes.data);
+        setPopularProducts(popularRes.data);
+        setTopVotedProduct(topVotedRes.data);
         setCategories(categoriesRes.data);
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -304,20 +311,13 @@ const LandingPage = () => {
   }, []);
 
   const categoryImages = {
-    clubs: "https://images.pexels.com/photos/33110007/pexels-photo-33110007.jpeg?auto=compress&cs=tinysrgb&w=600",
-    national: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600",
-    retro: "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600",
-    streetwear: "https://images.pexels.com/photos/11976246/pexels-photo-11976246.jpeg?auto=compress&cs=tinysrgb&w=600",
-    local: "https://images.unsplash.com/photo-1517466787929-bc90951d0974?w=600"
+    "official-tournament": "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600",
+    "streetwear": "https://images.pexels.com/photos/11976246/pexels-photo-11976246.jpeg?auto=compress&cs=tinysrgb&w=600",
+    "fan": "https://images.unsplash.com/photo-1517466787929-bc90951d0974?w=600",
+    "retro": "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=600",
+    "creative-designer": "https://images.pexels.com/photos/33110007/pexels-photo-33110007.jpeg?auto=compress&cs=tinysrgb&w=600",
+    "local-club": "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=600"
   };
-
-  const shopCategories = [
-    { id: "national", name: "National Team", description: "Ghana Black Stars jerseys" },
-    { id: "clubs", name: "Club Jerseys", description: "Official and replica club jerseys" },
-    { id: "local", name: "Local Team", description: "Support your local Ghanaian clubs" },
-    { id: "retro", name: "Retro Collection", description: "Classic and vintage designs" },
-    { id: "streetwear", name: "Streetwear", description: "Modern casual football fashion" }
-  ];
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="landing-page">
@@ -328,7 +328,7 @@ const LandingPage = () => {
         <div className="absolute inset-0">
           <img
             src="https://customer-assets.emergentagent.com/job_kente-market-1/artifacts/5rjkj9m0_Hero%20Banner.jpg"
-            alt="Ghana Jerseys"
+            alt="Ghana Jersey Collection"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-black/30"></div>
@@ -346,16 +346,15 @@ const LandingPage = () => {
                 Shop Collection
               </Button>
             </Link>
-            {!user && (
+            <Link to="/sell">
               <Button 
-                onClick={loginWithGoogle}
                 variant="outline" 
                 className="border-white text-white hover:bg-ashanti-gold hover:text-black hover:border-ashanti-gold px-10 py-6 font-body font-semibold tracking-wide text-sm"
                 data-testid="hero-join-btn"
               >
-                Become a Vendor
+                List Your Jersey
               </Button>
-            )}
+            </Link>
           </div>
         </div>
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
@@ -366,7 +365,22 @@ const LandingPage = () => {
       {/* Marquee */}
       <Marquee />
 
-      {/* Categories Bento Grid */}
+      {/* Vote for Best Jersey - Banner Section */}
+      <section className="py-16 px-6 md:px-12 bg-ashanti-gold">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="text-center md:text-left">
+            <h2 className="font-heading text-2xl md:text-3xl mb-2">Vote for the Best Jersey Design</h2>
+            <p className="font-body text-black/70">Help us crown the most loved Ghana-inspired jersey</p>
+          </div>
+          <Link to="/products">
+            <Button className="bg-black text-white hover:bg-white hover:text-black px-8 py-4 font-body font-semibold">
+              Browse & Vote Now
+            </Button>
+          </Link>
+        </div>
+      </section>
+
+      {/* Shop by Category with Top Voted Jersey */}
       <section className="py-24 px-6 md:px-12 max-w-7xl mx-auto">
         <h2 className="font-heading text-2xl md:text-3xl tracking-wide text-center mb-4" data-testid="categories-title">
           Shop by Category
@@ -376,54 +390,75 @@ const LandingPage = () => {
         </p>
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {shopCategories.map((category, index) => (
+          {/* Top Voted Jersey - Large Card */}
+          <Link
+            to={topVotedProduct ? `/products/${topVotedProduct.product_id}` : "/products?category=official-tournament"}
+            className="col-span-2 row-span-2 relative overflow-hidden group"
+            data-testid="top-voted-category"
+          >
+            <div className="aspect-square overflow-hidden">
+              <img
+                src={topVotedProduct?.images?.[0] || categoryImages["official-tournament"]}
+                alt="Top Voted Jersey"
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+              />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent group-hover:from-black/95 transition-all duration-300"></div>
+            
+            <div className="absolute top-4 left-4 bg-ashanti-gold text-black px-3 py-1 font-body text-xs font-semibold">
+              Most Voted
+            </div>
+            
+            <div className="absolute bottom-0 left-0 right-0 p-6">
+              <h3 className="font-heading text-white text-xl md:text-2xl group-hover:text-ashanti-gold transition-colors duration-300">
+                {topVotedProduct?.name || "Official Tournament"}
+              </h3>
+              <p className="font-body text-white/60 text-sm mt-1">
+                {topVotedProduct ? `${topVotedProduct.vote_count || 0} votes` : "Shop tournament jerseys"}
+              </p>
+              <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
+                <span className="font-body text-ashanti-gold text-sm font-semibold">View Jersey</span>
+                <ChevronRight size={16} className="text-ashanti-gold" />
+              </div>
+            </div>
+          </Link>
+
+          {/* Other Categories */}
+          {categories.slice(1, 5).map((category) => (
             <Link
               key={category.id}
               to={`/products?category=${category.id}`}
-              className={`relative overflow-hidden group ${index === 0 ? 'col-span-2 row-span-2' : ''}`}
+              className="relative overflow-hidden group"
               data-testid={`category-${category.id}`}
             >
-              <div className={`${index === 0 ? 'aspect-square' : 'aspect-[4/5]'} overflow-hidden`}>
+              <div className="aspect-[4/5] overflow-hidden">
                 <img
                   src={categoryImages[category.id]}
                   alt={category.name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                 />
               </div>
-              {/* Overlay with gradient */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent group-hover:from-black/90 transition-all duration-300"></div>
               
-              {/* Content */}
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <h3 className="font-heading text-white text-lg md:text-xl group-hover:text-ashanti-gold transition-colors duration-300">
+              <div className="absolute bottom-0 left-0 right-0 p-4">
+                <h3 className="font-heading text-white text-lg group-hover:text-ashanti-gold transition-colors duration-300">
                   {category.name}
                 </h3>
-                <p className="font-body text-white/60 text-xs mt-1 group-hover:text-white/80 transition-colors duration-300">
+                <p className="font-body text-white/60 text-xs mt-1">
                   {category.description}
                 </p>
-                
-                {/* Shop Now - appears on hover */}
-                <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                  <span className="font-body text-ashanti-gold text-sm font-semibold">Shop Now</span>
-                  <ChevronRight size={16} className="text-ashanti-gold" />
-                </div>
               </div>
-              
-              {/* Corner accent on hover */}
-              <div className="absolute top-0 right-0 w-0 h-0 border-t-[50px] border-t-ashanti-gold border-l-[50px] border-l-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* Featured Products */}
+      {/* Popular Jerseys */}
       <section className="py-24 px-6 md:px-12 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-12">
-            <h2 className="font-heading text-2xl md:text-3xl tracking-wide" data-testid="featured-title">
-              Featured
-            </h2>
-            <Link to="/products?featured=true" className="font-body text-sm font-medium tracking-wide hover:text-ashanti-gold transition-colors flex items-center gap-2">
+            <h2 className="font-heading text-2xl md:text-3xl tracking-wide">Popular Jerseys</h2>
+            <Link to="/products?sort_by=popular" className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
               View All <ChevronRight size={16} />
             </Link>
           </div>
@@ -434,24 +469,149 @@ const LandingPage = () => {
                 <div key={i} className="animate-pulse">
                   <div className="aspect-[3/4] bg-gray-200"></div>
                   <div className="h-4 bg-gray-200 mt-4 w-3/4"></div>
-                  <div className="h-4 bg-gray-200 mt-2 w-1/2"></div>
                 </div>
               ))}
             </div>
-          ) : featuredProducts.length > 0 ? (
+          ) : popularProducts.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {featuredProducts.map((product) => (
+              {popularProducts.slice(0, 4).map((product) => (
                 <ProductCard key={product.product_id} product={product} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-16">
-              <p className="font-body text-muted-text">Featured products coming soon</p>
-              <Link to="/products" className="mt-4 inline-block">
-                <Button variant="outline" className="border-black font-body font-semibold">Browse All Products</Button>
+            <p className="font-body text-muted-text text-center py-16">Coming soon</p>
+          )}
+        </div>
+      </section>
+
+      {/* Official Tournament Jerseys - Wide Banner */}
+      <section className="relative h-[400px] overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=1920"
+          alt="Official Tournament Jerseys"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/50"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center text-white px-6">
+            <h2 className="font-heading text-3xl md:text-4xl mb-4">Official Tournament Jerseys</h2>
+            <p className="font-body text-white/80 mb-6 max-w-xl mx-auto">
+              Authentic and fan-made jerseys from major tournaments. AFCON, World Cup, and more.
+            </p>
+            <Link to="/products?category=official-tournament">
+              <Button className="bg-ashanti-gold text-black hover:bg-white px-8 py-4 font-body font-semibold">
+                Shop Tournament Jerseys
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Designer Jerseys */}
+      <section className="py-24 px-6 md:px-12 bg-bone-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between mb-12">
+            <div>
+              <h2 className="font-heading text-2xl md:text-3xl tracking-wide">Designer Jerseys</h2>
+              <p className="font-body text-muted-text mt-2">Unique creations from Ghanaian designers</p>
+            </div>
+            <Link to="/products?category=creative-designer" className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
+              View All <ChevronRight size={16} />
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {featuredProducts.slice(0, 4).map((product) => (
+              <ProductCard key={product.product_id} product={product} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Limited Editions - Wide Banner */}
+      <section className="relative h-[400px] overflow-hidden bg-black">
+        <div className="absolute inset-0 flex items-center">
+          <div className="max-w-7xl mx-auto px-6 md:px-12 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+              <div className="text-white">
+                <span className="font-body text-ashanti-gold text-sm uppercase tracking-wider mb-4 block">Exclusive Collection</span>
+                <h2 className="font-heading text-3xl md:text-4xl mb-4">Limited Edition Jerseys</h2>
+                <p className="font-body text-white/70 mb-6">
+                  Rare designs with limited quantities. Once they're gone, they're gone.
+                </p>
+                <Link to="/products?limited=true">
+                  <Button className="bg-ashanti-gold text-black hover:bg-white px-8 py-4 font-body font-semibold">
+                    Shop Limited Editions
+                  </Button>
+                </Link>
+              </div>
+              <div className="hidden md:grid grid-cols-2 gap-4">
+                {featuredProducts.slice(0, 2).map((product) => (
+                  <Link key={product.product_id} to={`/products/${product.product_id}`} className="aspect-square bg-white/10 overflow-hidden">
+                    <img src={product.images?.[0]} alt={product.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Street Style Jerseys */}
+      <section className="py-24 px-6 md:px-12 bg-white">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between mb-12">
+            <h2 className="font-heading text-2xl md:text-3xl tracking-wide">Street Style Jerseys</h2>
+            <Link to="/products?category=streetwear" className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
+              View All <ChevronRight size={16} />
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {popularProducts.slice(0, 4).map((product) => (
+              <ProductCard key={product.product_id} product={product} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Local Club Jersey - Wide Banner */}
+      <section className="relative h-[400px] overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1920"
+          alt="Local Club Jerseys"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/80 to-transparent"></div>
+        <div className="absolute inset-0 flex items-center">
+          <div className="max-w-7xl mx-auto px-6 md:px-12 w-full">
+            <div className="max-w-lg text-white">
+              <h2 className="font-heading text-3xl md:text-4xl mb-4">Local Club Jerseys</h2>
+              <p className="font-body text-white/80 mb-6">
+                Support Hearts of Oak, Asante Kotoko, and other Ghanaian Premier League clubs.
+              </p>
+              <Link to="/products?category=local-club">
+                <Button className="bg-ashanti-gold text-black hover:bg-white px-8 py-4 font-body font-semibold">
+                  Shop Local Clubs
+                </Button>
               </Link>
             </div>
-          )}
+          </div>
+        </div>
+      </section>
+
+      {/* Compare Jerseys CTA */}
+      <section className="py-16 px-6 md:px-12 bg-bone-white">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="font-heading text-2xl md:text-3xl mb-4">Can't Decide?</h2>
+          <p className="font-body text-muted-text mb-8">
+            Compare two jerseys side by side to help you make the perfect choice.
+          </p>
+          <Link to="/compare">
+            <Button variant="outline" className="border-black px-8 py-4 font-body font-semibold">
+              Compare Jerseys
+            </Button>
+          </Link>
         </div>
       </section>
 

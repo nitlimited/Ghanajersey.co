@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Star, Heart, Minus, Plus, ChevronLeft, Share2 } from "lucide-react";
+import { Star, Heart, Minus, Plus, ChevronLeft, Share2, ThumbsUp } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -13,11 +13,14 @@ const ProductDetailPage = () => {
   const { productId } = useParams();
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
+  const [designerProducts, setDesignerProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [voteCount, setVoteCount] = useState(0);
+  const [hasVoted, setHasVoted] = useState(false);
   const { user, token } = useAuth();
   const { addToCart } = useCart();
 
@@ -27,13 +30,20 @@ const ProductDetailPage = () => {
       try {
         const response = await axios.get(`${API}/products/${productId}`);
         setProduct(response.data);
+        setVoteCount(response.data.vote_count || 0);
         if (response.data.sizes?.length > 0) {
           setSelectedSize(response.data.sizes[0]);
         }
 
-        // Fetch related products
+        // Fetch related products (same category)
         const relatedResponse = await axios.get(`${API}/products?category=${response.data.category}&limit=4`);
         setRelatedProducts(relatedResponse.data.filter(p => p.product_id !== productId).slice(0, 4));
+
+        // Fetch more from this designer
+        if (response.data.vendor_id) {
+          const designerResponse = await axios.get(`${API}/vendor/${response.data.vendor_id}/products?limit=4`);
+          setDesignerProducts(designerResponse.data.filter(p => p.product_id !== productId).slice(0, 4));
+        }
       } catch (error) {
         console.error("Failed to fetch product:", error);
       } finally {
@@ -44,6 +54,22 @@ const ProductDetailPage = () => {
     fetchProduct();
     window.scrollTo(0, 0);
   }, [productId]);
+
+  const handleVote = async () => {
+    try {
+      await axios.post(`${API}/products/${productId}/vote`);
+      setVoteCount(prev => prev + 1);
+      setHasVoted(true);
+      toast.success("Vote recorded! Thanks for voting.");
+    } catch (error) {
+      if (error.response?.status === 400) {
+        toast.error("You've already voted for this jersey");
+        setHasVoted(true);
+      } else {
+        toast.error("Failed to record vote");
+      }
+    }
+  };
 
   const handleAddToCart = async () => {
     if (!selectedSize) {
@@ -253,6 +279,32 @@ const ProductDetailPage = () => {
               </Button>
             </div>
 
+            {/* Vote for this Jersey */}
+            <div className="bg-ashanti-gold/10 border border-ashanti-gold/30 p-6 mt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-heading text-sm mb-1">Vote for this Design</h4>
+                  <p className="font-body text-xs text-muted-text">Help crown the best Ghana jersey</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <p className="font-heading text-2xl text-ashanti-gold" data-testid="vote-count">{voteCount}</p>
+                    <p className="font-body text-xs text-muted-text">votes</p>
+                  </div>
+                  <Button
+                    onClick={handleVote}
+                    disabled={hasVoted}
+                    variant="outline"
+                    className={`border-ashanti-gold ${hasVoted ? 'bg-ashanti-gold text-black' : 'hover:bg-ashanti-gold hover:text-black'}`}
+                    data-testid="vote-btn"
+                  >
+                    <ThumbsUp size={18} className="mr-2" fill={hasVoted ? "currentColor" : "none"} />
+                    {hasVoted ? 'Voted' : 'Vote'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             {/* Description Tabs */}
             <Tabs defaultValue="description" className="pt-8">
               <TabsList className="bg-transparent border-b border-black/10 w-full justify-start rounded-none h-auto p-0">
@@ -312,6 +364,21 @@ const ProductDetailPage = () => {
           </div>
         </div>
       </div>
+
+      {/* More from this Designer */}
+      {designerProducts.length > 0 && product.vendor_name && (
+        <section className="py-16 px-6 md:px-12 bg-bone-white">
+          <div className="max-w-7xl mx-auto">
+            <h2 className="font-heading text-xl tracking-widest uppercase mb-2">More from {product.vendor_name}</h2>
+            <p className="font-body text-sm text-muted-text mb-8">Explore other jerseys from this designer</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {designerProducts.map((p) => (
+                <ProductCard key={p.product_id} product={p} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Related Products */}
       {relatedProducts.length > 0 && (
