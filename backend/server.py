@@ -586,6 +586,284 @@ async def get_vendor_orders(user: dict = Depends(get_vendor_user)):
     
     return vendor_orders
 
+@api_router.put("/vendor/orders/{order_id}/status")
+async def update_vendor_order_status(order_id: str, status: str, user: dict = Depends(get_vendor_user)):
+    """Vendor can update order status: processing, shipped, delivered, cancelled"""
+    valid_statuses = ["processing", "shipped", "delivered", "cancelled"]
+    if status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+    
+    # Verify this order contains vendor's products
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    vendor_items = [item for item in order.get("items", []) if item.get("vendor_id") == user["user_id"]]
+    if not vendor_items:
+        raise HTTPException(status_code=403, detail="Not authorized to update this order")
+    
+    # Update vendor-specific status for this order
+    await db.orders.update_one(
+        {"order_id": order_id},
+        {"$set": {
+            f"vendor_status.{user['user_id']}": status,
+            "order_status": status  # Also update main status
+        }}
+    )
+    
+    return {"message": f"Order status updated to {status}"}
+
+@api_router.post("/vendor/orders/{order_id}/send-confirmation")
+async def send_delivery_confirmation_request(order_id: str, user: dict = Depends(get_vendor_user)):
+    """Vendor sends delivery confirmation request to customer (prepares for email integration)"""
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Generate confirmation token
+    confirmation_token = f"confirm_{uuid.uuid4().hex}"
+    
+    await db.orders.update_one(
+        {"order_id": order_id},
+        {"$set": {
+            "confirmation_token": confirmation_token,
+            "confirmation_requested_at": datetime.now(timezone.utc).isoformat(),
+            "confirmation_requested_by": user["user_id"]
+        }}
+    )
+    
+    # In production, this would trigger an email to the customer
+    # For now, return the confirmation link
+    return {
+        "message": "Confirmation request sent",
+        "confirmation_link": f"/api/orders/{order_id}/confirm/{confirmation_token}"
+    }
+
+@api_router.get("/orders/{order_id}/confirm/{token}")
+async def confirm_delivery(order_id: str, token: str):
+    """Customer confirms delivery via link (no auth required - link-based confirmation)"""
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.get("confirmation_token") != token:
+        raise HTTPException(status_code=400, detail="Invalid confirmation token")
+    
+    if order.get("delivery_confirmed"):
+        return {"message": "Delivery already confirmed"}
+    
+    await db.orders.update_one(
+        {"order_id": order_id},
+        {"$set": {
+            "delivery_confirmed": True,
+            "delivery_confirmed_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Delivery confirmed. Thank you!"}
+
+@api_router.get("/vendor/dashboard")
+async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
+    """Get comprehensive vendor dashboard data"""
+    vendor_id = user["user_id"]
+    
+    # Get vendor's products
+    products = await db.products.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(1000)
+    product_ids = [p["product_id"] for p in products]
+    
+    # Get orders containing vendor's products
+    all_orders = await db.orders.find({}, {"_id": 0}).to_list(1000)
+    vendor_orders = []
+    total_revenue = 0
+    monthly_revenue = 0
+    current_month = datetime.now(timezone.utc).month
+    
+    for order in all_orders:
+        vendor_items = [item for item in order.get("items", []) if item.get("product_id") in product_ids]
+        if vendor_items:
+            order_copy = {**order, "items": vendor_items}
+            if isinstance(order_copy.get('created_at'), str):
+                order_copy['created_at'] = datetime.fromisoformat(order_copy['created_at'])
+            vendor_orders.append(order_copy)
+            
+            if order.get("payment_status") == "paid":
+                order_total = sum(item.get("price", 0) * item.get("quantity", 1) for item in vendor_items)
+                total_revenue += order_total
+                
+                # Check if order is from current month
+                order_date = order_copy['created_at']
+                if hasattr(order_date, 'month') and order_date.month == current_month:
+                    monthly_revenue += order_total
+    
+    # Calculate earnings
+    platform_commission = total_revenue * 0.15
+    net_earnings = total_revenue * 0.85
+    
+    # Calculate payouts
+    confirmed_orders = [o for o in vendor_orders if o.get("delivery_confirmed") and o.get("payment_status") == "paid"]
+    pending_orders = [o for o in vendor_orders if not o.get("delivery_confirmed") and o.get("payment_status") == "paid"]
+    
+    paid_payout = sum(
+        sum(item.get("price", 0) * item.get("quantity", 1) for item in o.get("items", [])) * 0.85
+        for o in confirmed_orders
+    )
+    pending_payout = sum(
+        sum(item.get("price", 0) * item.get("quantity", 1) for item in o.get("items", [])) * 0.85
+        for o in pending_orders
+    )
+    
+    # Get low stock products (5 or fewer items)
+    low_stock_products = [p for p in products if p.get("stock", 0) <= 5 and p.get("status") == "approved"]
+    
+    # Get top selling products
+    product_sales = {}
+    for order in vendor_orders:
+        if order.get("payment_status") == "paid":
+            for item in order.get("items", []):
+                pid = item.get("product_id")
+                if pid:
+                    if pid not in product_sales:
+                        product_sales[pid] = {"quantity": 0, "revenue": 0}
+                    product_sales[pid]["quantity"] += item.get("quantity", 1)
+                    product_sales[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 1)
+    
+    top_sellers = []
+    for product in products:
+        if product["product_id"] in product_sales:
+            top_sellers.append({
+                **product,
+                "total_sold": product_sales[product["product_id"]]["quantity"],
+                "total_revenue": product_sales[product["product_id"]]["revenue"]
+            })
+    top_sellers.sort(key=lambda x: x["total_sold"], reverse=True)
+    
+    # Get product views (we'll track this in product_views collection)
+    views = await db.product_views.find({"product_id": {"$in": product_ids}}, {"_id": 0}).to_list(1000)
+    most_viewed = {}
+    for view in views:
+        pid = view.get("product_id")
+        if pid:
+            most_viewed[pid] = most_viewed.get(pid, 0) + 1
+    
+    return {
+        "total_products": len(products),
+        "approved_products": len([p for p in products if p.get("status") == "approved"]),
+        "pending_products": len([p for p in products if p.get("status") == "pending"]),
+        "paused_products": len([p for p in products if p.get("is_paused")]),
+        "total_orders": len(vendor_orders),
+        "new_orders": len([o for o in vendor_orders if o.get("order_status") == "processing"]),
+        "total_revenue": round(total_revenue, 2),
+        "monthly_revenue": round(monthly_revenue, 2),
+        "platform_commission": round(platform_commission, 2),
+        "net_earnings": round(net_earnings, 2),
+        "pending_payout": round(pending_payout, 2),
+        "paid_payout": round(paid_payout, 2),
+        "low_stock_products": low_stock_products,
+        "top_sellers": top_sellers[:5],
+        "total_votes": sum(p.get("vote_count", 0) for p in products)
+    }
+
+@api_router.put("/vendor/products/{product_id}/pause")
+async def toggle_product_pause(product_id: str, is_paused: bool, user: dict = Depends(get_vendor_user)):
+    """Pause or unpause a product"""
+    result = await db.products.update_one(
+        {"product_id": product_id, "vendor_id": user["user_id"]},
+        {"$set": {"is_paused": is_paused}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    return {"message": f"Product {'paused' if is_paused else 'unpaused'}"}
+
+@api_router.post("/vendor/products/{product_id}/duplicate")
+async def duplicate_product(product_id: str, user: dict = Depends(get_vendor_user)):
+    """Duplicate an existing product"""
+    existing = await db.products.find_one(
+        {"product_id": product_id, "vendor_id": user["user_id"]},
+        {"_id": 0}
+    )
+    
+    if not existing:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    new_product_id = f"prod_{uuid.uuid4().hex[:12]}"
+    new_product = {
+        **existing,
+        "product_id": new_product_id,
+        "name": f"{existing['name']} (Copy)",
+        "status": "pending",
+        "vote_count": 0,
+        "rating": 0.0,
+        "review_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.products.insert_one(new_product)
+    
+    return {"product_id": new_product_id, "message": "Product duplicated and submitted for approval"}
+
+@api_router.put("/vendor/products/{product_id}/stock")
+async def update_product_stock(product_id: str, stock: int, user: dict = Depends(get_vendor_user)):
+    """Update product stock quantity"""
+    result = await db.products.update_one(
+        {"product_id": product_id, "vendor_id": user["user_id"]},
+        {"$set": {"stock": stock}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    return {"message": "Stock updated"}
+
+# Vendor discount/promo routes
+class VendorPromoCreate(BaseModel):
+    code: str
+    discount_type: str = "percentage"  # percentage or fixed
+    discount_value: float
+    min_purchase: Optional[float] = None
+    max_uses: Optional[int] = None
+    expires_at: Optional[str] = None
+    product_ids: Optional[List[str]] = None  # If empty, applies to all vendor products
+
+@api_router.post("/vendor/promos")
+async def create_vendor_promo(promo: VendorPromoCreate, user: dict = Depends(get_vendor_user)):
+    """Create a vendor-specific promo code"""
+    promo_id = f"promo_{uuid.uuid4().hex[:12]}"
+    
+    promo_doc = {
+        "promo_id": promo_id,
+        "vendor_id": user["user_id"],
+        "code": promo.code.upper(),
+        "discount_type": promo.discount_type,
+        "discount_value": promo.discount_value,
+        "min_purchase": promo.min_purchase,
+        "max_uses": promo.max_uses,
+        "uses": 0,
+        "expires_at": promo.expires_at,
+        "product_ids": promo.product_ids,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.vendor_promos.insert_one(promo_doc)
+    
+    return {"promo_id": promo_id, "message": "Promo code created"}
+
+@api_router.get("/vendor/promos")
+async def get_vendor_promos(user: dict = Depends(get_vendor_user)):
+    """Get all promos created by vendor"""
+    promos = await db.vendor_promos.find({"vendor_id": user["user_id"]}, {"_id": 0}).to_list(100)
+    return promos
+
+@api_router.delete("/vendor/promos/{promo_id}")
+async def delete_vendor_promo(promo_id: str, user: dict = Depends(get_vendor_user)):
+    """Delete a vendor promo"""
+    result = await db.vendor_promos.delete_one({"promo_id": promo_id, "vendor_id": user["user_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Promo not found")
+    return {"message": "Promo deleted"}
+
 # ==================== PRODUCT ROUTES (PUBLIC) ====================
 
 @api_router.get("/products")
@@ -814,7 +1092,7 @@ async def get_vendor_public_profile(vendor_id: str):
     }
 
 @api_router.get("/products/{product_id}")
-async def get_product(product_id: str):
+async def get_product(product_id: str, request: Request):
     product = await db.products.find_one(
         {"product_id": product_id, "status": "approved"},
         {"_id": 0}
@@ -829,6 +1107,14 @@ async def get_product(product_id: str):
     # Ensure vote_count exists for consistency
     if 'vote_count' not in product:
         product['vote_count'] = 0
+    
+    # Track product view for analytics
+    viewer_ip = request.client.host if request.client else "unknown"
+    await db.product_views.insert_one({
+        "product_id": product_id,
+        "viewer_ip": viewer_ip,
+        "viewed_at": datetime.now(timezone.utc).isoformat()
+    })
     
     # Get reviews
     reviews = await db.reviews.find(
@@ -1480,9 +1766,15 @@ async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
     total_vendors = await db.users.count_documents({"role": "vendor"})
     total_customers = await db.users.count_documents({"role": "customer"})
     
-    # Calculate revenue
+    # Calculate revenue with 15% platform commission
     paid_orders = await db.orders.find({"payment_status": "paid"}, {"_id": 0}).to_list(1000)
     total_revenue = sum(order.get("total", 0) for order in paid_orders)
+    platform_commission = total_revenue * 0.15
+    vendor_earnings_total = total_revenue * 0.85
+    
+    # Get confirmed deliveries count
+    confirmed_deliveries = await db.orders.count_documents({"delivery_confirmed": True})
+    pending_confirmations = await db.orders.count_documents({"payment_status": "paid", "delivery_confirmed": {"$ne": True}})
     
     # Recent orders
     recent_orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
@@ -1497,7 +1789,106 @@ async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
         "total_vendors": total_vendors,
         "total_customers": total_customers,
         "total_revenue": round(total_revenue, 2),
+        "platform_commission": round(platform_commission, 2),
+        "vendor_earnings_total": round(vendor_earnings_total, 2),
+        "confirmed_deliveries": confirmed_deliveries,
+        "pending_confirmations": pending_confirmations,
         "recent_orders": recent_orders
+    }
+
+@api_router.get("/admin/analytics/vendors")
+async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
+    """Get detailed analytics for all vendors including their earnings"""
+    vendors = await db.users.find({"role": "vendor"}, {"_id": 0, "password": 0}).to_list(100)
+    
+    vendor_analytics = []
+    for vendor in vendors:
+        vendor_id = vendor["user_id"]
+        
+        # Get vendor's products
+        products = await db.products.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(100)
+        product_ids = [p["product_id"] for p in products]
+        
+        # Get vendor's orders (orders containing their products)
+        vendor_orders = []
+        all_orders = await db.orders.find({"payment_status": "paid"}, {"_id": 0}).to_list(1000)
+        
+        vendor_revenue = 0
+        for order in all_orders:
+            for item in order.get("items", []):
+                if item.get("product_id") in product_ids:
+                    item_total = item.get("price", 0) * item.get("quantity", 1)
+                    vendor_revenue += item_total
+                    if order not in vendor_orders:
+                        vendor_orders.append(order)
+        
+        platform_commission = vendor_revenue * 0.15
+        net_earnings = vendor_revenue * 0.85
+        
+        # Get confirmed deliveries for this vendor
+        confirmed_orders = [o for o in vendor_orders if o.get("delivery_confirmed")]
+        pending_payout = sum(
+            sum(item.get("price", 0) * item.get("quantity", 1) 
+                for item in o.get("items", []) 
+                if item.get("product_id") in product_ids) * 0.85
+            for o in vendor_orders if not o.get("delivery_confirmed")
+        )
+        paid_payout = sum(
+            sum(item.get("price", 0) * item.get("quantity", 1) 
+                for item in o.get("items", []) 
+                if item.get("product_id") in product_ids) * 0.85
+            for o in confirmed_orders
+        )
+        
+        # Get vote counts for vendor's products
+        total_votes = sum(p.get("vote_count", 0) for p in products)
+        
+        vendor_analytics.append({
+            "vendor_id": vendor_id,
+            "name": vendor.get("name"),
+            "email": vendor.get("email"),
+            "brand_name": vendor.get("vendor_profile", {}).get("brand_name"),
+            "total_products": len(products),
+            "approved_products": len([p for p in products if p.get("status") == "approved"]),
+            "pending_products": len([p for p in products if p.get("status") == "pending"]),
+            "total_orders": len(vendor_orders),
+            "total_revenue": round(vendor_revenue, 2),
+            "platform_commission": round(platform_commission, 2),
+            "net_earnings": round(net_earnings, 2),
+            "pending_payout": round(pending_payout, 2),
+            "paid_payout": round(paid_payout, 2),
+            "total_votes": total_votes,
+            "created_at": vendor.get("created_at"),
+            "is_active": vendor.get("is_active", True)
+        })
+    
+    return vendor_analytics
+
+@api_router.get("/admin/vendors/{vendor_id}/products")
+async def get_vendor_products_admin(vendor_id: str, user: dict = Depends(get_admin_user)):
+    """Get all products for a specific vendor (admin view)"""
+    products = await db.products.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(100)
+    
+    for product in products:
+        if isinstance(product.get('created_at'), str):
+            product['created_at'] = datetime.fromisoformat(product['created_at'])
+    
+    return products
+
+@api_router.get("/admin/voting-stats")
+async def get_voting_stats(user: dict = Depends(get_admin_user)):
+    """Get voting statistics for all products (view only)"""
+    products = await db.products.find(
+        {"status": "approved"},
+        {"_id": 0, "product_id": 1, "name": 1, "vote_count": 1, "vendor_name": 1, "images": 1}
+    ).sort("vote_count", -1).to_list(100)
+    
+    total_votes = sum(p.get("vote_count", 0) for p in products)
+    
+    return {
+        "total_votes": total_votes,
+        "products": products,
+        "top_voted": products[0] if products else None
     }
 
 @api_router.get("/admin/products/pending")

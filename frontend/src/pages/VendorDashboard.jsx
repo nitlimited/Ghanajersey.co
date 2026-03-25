@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Package, Plus, Edit2, Trash2, Eye, Clock, CheckCircle, XCircle, ShoppingBag, DollarSign } from "lucide-react";
+import { 
+  Package, Plus, Edit2, Trash2, Eye, Clock, CheckCircle, XCircle, 
+  ShoppingBag, DollarSign, TrendingUp, AlertTriangle, Copy, Pause, Play,
+  Truck, CreditCard, HelpCircle, FileText, MessageSquare, Percent, ThumbsUp
+} from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -15,11 +19,14 @@ import axios from "axios";
 
 const VendorDashboard = () => {
   const { user, token } = useAuth();
+  const [dashboard, setDashboard] = useState(null);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [promos, setPromos] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
   // Product form state
@@ -28,21 +35,32 @@ const VendorDashboard = () => {
     description: "",
     price: "",
     currency: "USD",
-    category: "clubs",
+    category: "official-tournament",
     sizes: ["S", "M", "L", "XL"],
     stock: "",
-    images: [""],
+    images: ["", ""],
     tags: []
   });
 
+  // Promo form state
+  const [promoForm, setPromoForm] = useState({
+    code: "",
+    discount_type: "percentage",
+    discount_value: "",
+    min_purchase: "",
+    max_uses: ""
+  });
+
   const categories = [
-    { id: "clubs", name: "Club Jerseys" },
-    { id: "national", name: "National Team" },
+    { id: "official-tournament", name: "Official Tournament" },
+    { id: "streetwear", name: "Streetwear" },
+    { id: "fan", name: "Fan Jerseys" },
     { id: "retro", name: "Retro Collection" },
-    { id: "streetwear", name: "Streetwear" }
+    { id: "creative-designer", name: "Creative Designer" },
+    { id: "local-club", name: "Local Club" }
   ];
 
-  const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
+  const sizes = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
 
   useEffect(() => {
     fetchData();
@@ -50,14 +68,18 @@ const VendorDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [productsRes, ordersRes, profileRes] = await Promise.all([
+      const [dashboardRes, productsRes, ordersRes, profileRes, promosRes] = await Promise.all([
+        axios.get(`${API}/vendor/dashboard`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/vendor/products`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/vendor/orders`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API}/vendor/profile`, { headers: { Authorization: `Bearer ${token}` } })
+        axios.get(`${API}/vendor/profile`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/vendor/promos`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
+      setDashboard(dashboardRes.data);
       setProducts(productsRes.data);
       setOrders(ordersRes.data);
       setProfile(profileRes.data);
+      setPromos(promosRes.data);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -116,6 +138,99 @@ const VendorDashboard = () => {
     }
   };
 
+  const handleDuplicateProduct = async (productId) => {
+    try {
+      await axios.post(`${API}/vendor/products/${productId}/duplicate`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Product duplicated and submitted for approval");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to duplicate product");
+    }
+  };
+
+  const handleTogglePause = async (productId, isPaused) => {
+    try {
+      await axios.put(`${API}/vendor/products/${productId}/pause?is_paused=${!isPaused}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(isPaused ? "Product unpaused" : "Product paused");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to update product");
+    }
+  };
+
+  const handleUpdateStock = async (productId, newStock) => {
+    try {
+      await axios.put(`${API}/vendor/products/${productId}/stock?stock=${newStock}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Stock updated");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to update stock");
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId, status) => {
+    try {
+      await axios.put(`${API}/vendor/orders/${orderId}/status?status=${status}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`Order marked as ${status}`);
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to update order");
+    }
+  };
+
+  const handleSendConfirmation = async (orderId) => {
+    try {
+      const res = await axios.post(`${API}/vendor/orders/${orderId}/send-confirmation`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Confirmation request sent to customer");
+      // In production, this would trigger an email
+      console.log("Confirmation link:", res.data.confirmation_link);
+    } catch (error) {
+      toast.error("Failed to send confirmation request");
+    }
+  };
+
+  const handleCreatePromo = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/vendor/promos`, {
+        ...promoForm,
+        discount_value: parseFloat(promoForm.discount_value),
+        min_purchase: promoForm.min_purchase ? parseFloat(promoForm.min_purchase) : null,
+        max_uses: promoForm.max_uses ? parseInt(promoForm.max_uses) : null
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Promo code created");
+      setShowPromoModal(false);
+      setPromoForm({ code: "", discount_type: "percentage", discount_value: "", min_purchase: "", max_uses: "" });
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to create promo");
+    }
+  };
+
+  const handleDeletePromo = async (promoId) => {
+    try {
+      await axios.delete(`${API}/vendor/promos/${promoId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Promo deleted");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to delete promo");
+    }
+  };
+
   const openEditModal = (product) => {
     setEditingProduct(product);
     setProductForm({
@@ -126,7 +241,7 @@ const VendorDashboard = () => {
       category: product.category,
       sizes: product.sizes,
       stock: product.stock.toString(),
-      images: product.images.length > 0 ? product.images : [""],
+      images: product.images.length > 0 ? [...product.images, ""] : ["", ""],
       tags: product.tags || []
     });
     setShowProductModal(true);
@@ -138,10 +253,10 @@ const VendorDashboard = () => {
       description: "",
       price: "",
       currency: "USD",
-      category: "clubs",
+      category: "official-tournament",
       sizes: ["S", "M", "L", "XL"],
       stock: "",
-      images: [""],
+      images: ["", ""],
       tags: []
     });
   };
@@ -159,18 +274,34 @@ const VendorDashboard = () => {
     }
   };
 
-  // Calculate stats
-  const approvedProducts = products.filter(p => p.status === "approved").length;
-  const pendingProducts = products.filter(p => p.status === "pending").length;
-  const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+  const getOrderStatusColor = (status) => {
+    switch (status) {
+      case "processing": return "bg-blue-100 text-blue-700";
+      case "shipped": return "bg-purple-100 text-purple-700";
+      case "delivered": return "bg-ghana-green/10 text-ghana-green";
+      case "cancelled": return "bg-ghana-red/10 text-ghana-red";
+      default: return "bg-gray-100 text-muted-text";
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-bone-white">
+        <Header forceLight={true} stickyAnnouncement={true} />
+        <div className="pt-12 flex items-center justify-center min-h-[60vh]">
+          <div className="w-12 h-12 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="vendor-dashboard">
-      <Header forceLight={true} />
+      <Header forceLight={true} stickyAnnouncement={true} />
 
-      <div className="pt-32 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
+      <div className="pt-12 pb-24 px-6 md:px-12 max-w-7xl mx-auto">
         {/* Welcome */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="font-heading text-2xl md:text-3xl tracking-widest uppercase" data-testid="vendor-title">
               Vendor Dashboard
@@ -186,13 +317,13 @@ const VendorDashboard = () => {
                 onClick={() => { setEditingProduct(null); resetForm(); }}
                 data-testid="add-product-btn"
               >
-                <Plus size={16} className="mr-2" /> Add Product
+                <Plus size={16} className="mr-2" /> Add New Jersey
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="font-heading tracking-widest uppercase">
-                  {editingProduct ? "Edit Product" : "Add New Product"}
+                  {editingProduct ? "Edit Product" : "Add New Jersey"}
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmitProduct} className="space-y-6 mt-4">
@@ -200,9 +331,9 @@ const VendorDashboard = () => {
                   <Label className="font-body text-sm uppercase tracking-wider">Product Name *</Label>
                   <Input
                     value={productForm.name}
-                    onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                    className="mt-2 rounded-none"
-                    data-testid="product-name-input"
+                    onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                    placeholder="Ghana Home Jersey 2024"
+                    className="mt-2"
                   />
                 </div>
 
@@ -210,9 +341,9 @@ const VendorDashboard = () => {
                   <Label className="font-body text-sm uppercase tracking-wider">Description *</Label>
                   <Textarea
                     value={productForm.description}
-                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                    className="mt-2 rounded-none min-h-[100px]"
-                    data-testid="product-description-input"
+                    onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                    placeholder="Describe your jersey..."
+                    className="mt-2 min-h-[100px]"
                   />
                 </div>
 
@@ -223,112 +354,91 @@ const VendorDashboard = () => {
                       type="number"
                       step="0.01"
                       value={productForm.price}
-                      onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                      className="mt-2 rounded-none"
-                      data-testid="product-price-input"
+                      onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                      placeholder="79.99"
+                      className="mt-2"
                     />
                   </div>
                   <div>
-                    <Label className="font-body text-sm uppercase tracking-wider">Currency</Label>
-                    <Select value={productForm.currency} onValueChange={(v) => setProductForm({ ...productForm, currency: v })}>
-                      <SelectTrigger className="mt-2 rounded-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="USD">USD</SelectItem>
-                        <SelectItem value="GHS">GHS</SelectItem>
-                        <SelectItem value="GBP">GBP</SelectItem>
-                        <SelectItem value="EUR">EUR</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="font-body text-sm uppercase tracking-wider">Category</Label>
-                    <Select value={productForm.category} onValueChange={(v) => setProductForm({ ...productForm, category: v })}>
-                      <SelectTrigger className="mt-2 rounded-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map(cat => (
-                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="font-body text-sm uppercase tracking-wider">Stock</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Stock Quantity *</Label>
                     <Input
                       type="number"
                       value={productForm.stock}
-                      onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
-                      className="mt-2 rounded-none"
+                      onChange={(e) => setProductForm({...productForm, stock: e.target.value})}
+                      placeholder="50"
+                      className="mt-2"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Sizes</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Category</Label>
+                  <Select
+                    value={productForm.category}
+                    onValueChange={(value) => setProductForm({...productForm, category: value})}
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="font-body text-sm uppercase tracking-wider">Available Sizes</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {sizes.map(size => (
-                      <button
+                    {sizes.map((size) => (
+                      <Button
                         key={size}
                         type="button"
+                        variant={productForm.sizes.includes(size) ? "default" : "outline"}
+                        size="sm"
+                        className={productForm.sizes.includes(size) ? "bg-black" : ""}
                         onClick={() => {
                           const newSizes = productForm.sizes.includes(size)
                             ? productForm.sizes.filter(s => s !== size)
                             : [...productForm.sizes, size];
-                          setProductForm({ ...productForm, sizes: newSizes });
+                          setProductForm({...productForm, sizes: newSizes});
                         }}
-                        className={`w-12 h-10 border font-body text-sm ${productForm.sizes.includes(size) ? 'bg-black text-white border-black' : 'border-black/20'}`}
                       >
                         {size}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Image URLs</Label>
-                  {productForm.images.map((url, index) => (
-                    <div key={index} className="flex gap-2 mt-2">
-                      <Input
-                        value={url}
-                        onChange={(e) => {
-                          const newImages = [...productForm.images];
-                          newImages[index] = e.target.value;
-                          setProductForm({ ...productForm, images: newImages });
-                        }}
-                        placeholder="https://example.com/image.jpg"
-                        className="rounded-none"
-                      />
-                      {index > 0 && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            const newImages = productForm.images.filter((_, i) => i !== index);
-                            setProductForm({ ...productForm, images: newImages });
-                          }}
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      )}
-                    </div>
+                  <Label className="font-body text-sm uppercase tracking-wider">Image URLs (Front & Back)</Label>
+                  <p className="font-body text-xs text-muted-text mb-2">Add front image first, then back for hover effect</p>
+                  {productForm.images.map((img, index) => (
+                    <Input
+                      key={index}
+                      value={img}
+                      onChange={(e) => {
+                        const newImages = [...productForm.images];
+                        newImages[index] = e.target.value;
+                        setProductForm({...productForm, images: newImages});
+                      }}
+                      placeholder={index === 0 ? "Front image URL" : "Back image URL (for hover)"}
+                      className="mt-2"
+                    />
                   ))}
                   <Button
                     type="button"
                     variant="outline"
+                    size="sm"
                     className="mt-2"
-                    onClick={() => setProductForm({ ...productForm, images: [...productForm.images, ""] })}
+                    onClick={() => setProductForm({...productForm, images: [...productForm.images, ""]})}
                   >
-                    <Plus size={16} className="mr-2" /> Add Image
+                    + Add More Images
                   </Button>
                 </div>
 
-                <Button type="submit" className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6" data-testid="submit-product-btn">
+                <Button type="submit" className="w-full bg-black hover:bg-ashanti-gold hover:text-black">
                   {editingProduct ? "Update Product" : "Submit for Approval"}
                 </Button>
               </form>
@@ -336,163 +446,513 @@ const VendorDashboard = () => {
           </Dialog>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-          <div className="bg-white p-6 border border-black/10">
-            <div className="flex items-center gap-3 text-muted-text mb-2">
-              <Package size={20} />
-              <span className="font-body text-xs uppercase tracking-wider">Total Products</span>
+        {/* Financial Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <div className="bg-black text-white p-5">
+            <div className="flex items-center gap-2 text-white/60 mb-2">
+              <DollarSign size={14} />
+              <span className="font-body text-xs uppercase tracking-wider">Total Revenue</span>
             </div>
-            <span className="font-body text-3xl font-medium">{products.length}</span>
+            <span className="font-body text-2xl font-medium">${dashboard?.total_revenue?.toFixed(2) || "0.00"}</span>
           </div>
-          <div className="bg-white p-6 border border-black/10">
-            <div className="flex items-center gap-3 text-muted-text mb-2">
-              <CheckCircle size={20} />
-              <span className="font-body text-xs uppercase tracking-wider">Approved</span>
+          <div className="bg-ashanti-gold/10 border border-ashanti-gold/30 p-5">
+            <div className="flex items-center gap-2 text-ashanti-gold mb-2">
+              <Percent size={14} />
+              <span className="font-body text-xs uppercase tracking-wider">Platform Fee (15%)</span>
             </div>
-            <span className="font-body text-3xl font-medium text-ghana-green">{approvedProducts}</span>
+            <span className="font-body text-2xl font-medium">${dashboard?.platform_commission?.toFixed(2) || "0.00"}</span>
           </div>
-          <div className="bg-white p-6 border border-black/10">
-            <div className="flex items-center gap-3 text-muted-text mb-2">
-              <Clock size={20} />
-              <span className="font-body text-xs uppercase tracking-wider">Pending</span>
+          <div className="bg-ghana-green/10 border border-ghana-green/30 p-5">
+            <div className="flex items-center gap-2 text-ghana-green mb-2">
+              <CreditCard size={14} />
+              <span className="font-body text-xs uppercase tracking-wider">Net Earnings</span>
             </div>
-            <span className="font-body text-3xl font-medium text-ashanti-gold">{pendingProducts}</span>
+            <span className="font-body text-2xl font-medium text-ghana-green">${dashboard?.net_earnings?.toFixed(2) || "0.00"}</span>
           </div>
-          <div className="bg-white p-6 border border-black/10">
-            <div className="flex items-center gap-3 text-muted-text mb-2">
-              <DollarSign size={20} />
-              <span className="font-body text-xs uppercase tracking-wider">Revenue</span>
+          <div className="bg-white border border-black/10 p-5">
+            <div className="flex items-center gap-2 text-muted-text mb-2">
+              <Clock size={14} />
+              <span className="font-body text-xs uppercase tracking-wider">Pending Payout</span>
             </div>
-            <span className="font-body text-3xl font-medium">${totalRevenue.toFixed(2)}</span>
+            <span className="font-body text-2xl font-medium">${dashboard?.pending_payout?.toFixed(2) || "0.00"}</span>
+          </div>
+          <div className="bg-white border border-black/10 p-5">
+            <div className="flex items-center gap-2 text-muted-text mb-2">
+              <CheckCircle size={14} />
+              <span className="font-body text-xs uppercase tracking-wider">Paid Out</span>
+            </div>
+            <span className="font-body text-2xl font-medium">${dashboard?.paid_payout?.toFixed(2) || "0.00"}</span>
           </div>
         </div>
 
-        <Tabs defaultValue="products" className="w-full">
-          <TabsList className="bg-transparent border-b border-black/10 w-full justify-start rounded-none h-auto p-0 mb-8">
-            <TabsTrigger 
-              value="products" 
-              className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-6"
-            >
-              Products
+        {/* Performance Stats */}
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-8">
+          <div className="bg-white p-4 border border-black/10 text-center">
+            <p className="font-body text-xs text-muted-text uppercase">Products</p>
+            <p className="font-body text-xl font-medium">{dashboard?.approved_products || 0}</p>
+          </div>
+          <div className="bg-white p-4 border border-black/10 text-center">
+            <p className="font-body text-xs text-muted-text uppercase">Pending</p>
+            <p className="font-body text-xl font-medium text-ashanti-gold">{dashboard?.pending_products || 0}</p>
+          </div>
+          <div className="bg-white p-4 border border-black/10 text-center">
+            <p className="font-body text-xs text-muted-text uppercase">Total Orders</p>
+            <p className="font-body text-xl font-medium">{dashboard?.total_orders || 0}</p>
+          </div>
+          <div className="bg-white p-4 border border-black/10 text-center">
+            <p className="font-body text-xs text-muted-text uppercase">New Orders</p>
+            <p className="font-body text-xl font-medium text-blue-600">{dashboard?.new_orders || 0}</p>
+          </div>
+          <div className="bg-white p-4 border border-black/10 text-center">
+            <p className="font-body text-xs text-muted-text uppercase">Monthly Sales</p>
+            <p className="font-body text-xl font-medium">${dashboard?.monthly_revenue?.toFixed(2) || "0.00"}</p>
+          </div>
+          <div className="bg-white p-4 border border-black/10 text-center">
+            <p className="font-body text-xs text-muted-text uppercase">Total Votes</p>
+            <p className="font-body text-xl font-medium">{dashboard?.total_votes || 0}</p>
+          </div>
+        </div>
+
+        {/* Low Stock Alerts */}
+        {dashboard?.low_stock_products?.length > 0 && (
+          <div className="bg-ghana-red/10 border border-ghana-red/30 p-4 mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={18} className="text-ghana-red" />
+              <h3 className="font-body text-sm font-semibold text-ghana-red uppercase">Low Stock Alert</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {dashboard.low_stock_products.map((product) => (
+                <div key={product.product_id} className="flex items-center gap-3 bg-white p-3">
+                  <img src={product.images?.[0]} alt={product.name} className="w-12 h-12 object-cover" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-body text-sm truncate">{product.name}</p>
+                    <p className="font-body text-xs text-ghana-red font-semibold">{product.stock} items left</p>
+                  </div>
+                  <Input
+                    type="number"
+                    className="w-20 h-8 text-sm"
+                    placeholder="Add"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const newStock = parseInt(e.target.value) + product.stock;
+                        handleUpdateStock(product.product_id, newStock);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Tabs defaultValue="orders" className="w-full">
+          <TabsList className="bg-transparent border-b border-black/10 w-full justify-start rounded-none h-auto p-0 mb-8 overflow-x-auto flex-nowrap">
+            <TabsTrigger value="orders" className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-4 whitespace-nowrap">
+              Orders ({orders.length})
             </TabsTrigger>
-            <TabsTrigger 
-              value="orders" 
-              className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-6"
-            >
-              Orders
+            <TabsTrigger value="products" className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-4 whitespace-nowrap">
+              Products ({products.length})
+            </TabsTrigger>
+            <TabsTrigger value="insights" className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-4 whitespace-nowrap">
+              Performance
+            </TabsTrigger>
+            <TabsTrigger value="promos" className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-4 whitespace-nowrap">
+              Promos
+            </TabsTrigger>
+            <TabsTrigger value="support" className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-4 whitespace-nowrap">
+              Support
             </TabsTrigger>
           </TabsList>
 
+          {/* Orders Tab */}
+          <TabsContent value="orders">
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <div key={order.order_id} className="bg-white border border-black/10 p-6">
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-heading text-sm">Order #{order.order_id.slice(-8)}</h3>
+                        <span className={`px-2 py-1 text-xs font-body ${getOrderStatusColor(order.order_status)}`}>
+                          {order.order_status || 'pending'}
+                        </span>
+                        {order.delivery_confirmed && (
+                          <span className="px-2 py-1 text-xs font-body bg-ghana-green/10 text-ghana-green flex items-center gap-1">
+                            <CheckCircle size={10} /> Confirmed
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-body text-xs text-muted-text">
+                        {new Date(order.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Select
+                        value={order.order_status || 'processing'}
+                        onValueChange={(value) => handleUpdateOrderStatus(order.order_id, value)}
+                      >
+                        <SelectTrigger className="w-32 h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="processing">Processing</SelectItem>
+                          <SelectItem value="shipped">Shipped</SelectItem>
+                          <SelectItem value="delivered">Delivered</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {order.order_status === 'delivered' && !order.delivery_confirmed && (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="border-ashanti-gold text-ashanti-gold hover:bg-ashanti-gold hover:text-black"
+                          onClick={() => handleSendConfirmation(order.order_id)}
+                        >
+                          Request Confirmation
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Customer Details */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-bone-white">
+                    <div>
+                      <p className="font-body text-xs text-muted-text uppercase mb-1">Customer</p>
+                      <p className="font-body text-sm font-medium">{order.shipping_address?.name || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="font-body text-xs text-muted-text uppercase mb-1">Phone</p>
+                      <p className="font-body text-sm">{order.shipping_address?.phone || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="font-body text-xs text-muted-text uppercase mb-1">Address</p>
+                      <p className="font-body text-sm">
+                        {order.shipping_address?.address}, {order.shipping_address?.city}, {order.shipping_address?.country}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Order Items */}
+                  <div className="space-y-3">
+                    {order.items?.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-4 p-3 border border-black/5">
+                        <img src={item.image} alt={item.name} className="w-16 h-16 object-cover" />
+                        <div className="flex-1">
+                          <p className="font-body text-sm font-medium">{item.name}</p>
+                          <p className="font-body text-xs text-muted-text">
+                            Size: {item.size} | Qty: {item.quantity}
+                          </p>
+                        </div>
+                        <p className="font-body text-sm font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-black/10 flex justify-between items-center">
+                    <p className="font-body text-sm text-muted-text">
+                      Payment: <span className={order.payment_status === 'paid' ? 'text-ghana-green' : 'text-ashanti-gold'}>{order.payment_status}</span>
+                    </p>
+                    <p className="font-body text-lg font-semibold">
+                      Total: ${order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {orders.length === 0 && (
+                <p className="text-center text-muted-text py-12 font-body">No orders yet</p>
+              )}
+            </div>
+          </TabsContent>
+
           {/* Products Tab */}
           <TabsContent value="products">
-            {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="bg-white p-4 animate-pulse">
-                    <div className="aspect-[3/4] bg-gray-200"></div>
-                    <div className="h-4 bg-gray-200 mt-4 w-3/4"></div>
-                  </div>
-                ))}
-              </div>
-            ) : products.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {products.map((product) => (
-                  <div key={product.product_id} className="bg-white border border-black/10 overflow-hidden" data-testid={`vendor-product-${product.product_id}`}>
-                    <div className="aspect-[4/3] bg-gray-100 overflow-hidden relative">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {products.map((product) => (
+                <div key={product.product_id} className={`bg-white border overflow-hidden ${product.is_paused ? 'border-muted-text opacity-60' : 'border-black/10'}`}>
+                  <div className="relative">
+                    <div className="aspect-[4/3] overflow-hidden">
                       <img
-                        src={product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=400"}
+                        src={product.images?.[0] || "https://via.placeholder.com/400"}
                         alt={product.name}
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute top-4 left-4">
-                        {getStatusBadge(product.status)}
-                      </div>
                     </div>
-                    <div className="p-4">
-                      <h3 className="font-heading text-sm tracking-wide uppercase">{product.name}</h3>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="font-body text-lg font-medium">{product.currency} {product.price.toFixed(2)}</span>
-                        <span className="font-body text-sm text-muted-text">Stock: {product.stock}</span>
+                    {product.is_paused && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <span className="text-white font-body text-sm uppercase tracking-wider">Paused</span>
                       </div>
-                      <div className="flex gap-2 mt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => openEditModal(product)}
-                        >
-                          <Edit2 size={14} className="mr-1" /> Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteProduct(product.product_id)}
-                          className="text-ghana-red hover:bg-ghana-red hover:text-white"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                        {product.status === "approved" && (
-                          <Link to={`/products/${product.product_id}`}>
-                            <Button variant="outline" size="sm">
-                              <Eye size={14} />
-                            </Button>
-                          </Link>
-                        )}
-                      </div>
+                    )}
+                    <div className="absolute top-2 right-2 flex gap-1">
+                      {product.stock <= 5 && (
+                        <span className="bg-ghana-red text-white text-xs px-2 py-1 font-body">Low Stock</span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 bg-white border border-black/10">
-                <Package size={48} className="mx-auto text-muted-text mb-4" />
-                <h3 className="font-heading text-lg tracking-widest uppercase mb-2">No products yet</h3>
-                <p className="font-body text-muted-text mb-6">Add your first product to get started</p>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-heading text-sm tracking-wide">{product.name}</h3>
+                        {getStatusBadge(product.status)}
+                      </div>
+                      <span className="font-body text-lg font-semibold">${product.price}</span>
+                    </div>
+                    <p className="font-body text-xs text-muted-text mb-3">
+                      Stock: {product.stock} | Votes: {product.vote_count || 0}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="border-black" onClick={() => openEditModal(product)}>
+                        <Edit2 size={12} className="mr-1" /> Edit
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleDuplicateProduct(product.product_id)}>
+                        <Copy size={12} className="mr-1" /> Duplicate
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleTogglePause(product.product_id, product.is_paused)}
+                      >
+                        {product.is_paused ? <Play size={12} className="mr-1" /> : <Pause size={12} className="mr-1" />}
+                        {product.is_paused ? "Unpause" : "Pause"}
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="border-ghana-red text-ghana-red hover:bg-ghana-red hover:text-white"
+                        onClick={() => handleDeleteProduct(product.product_id)}
+                      >
+                        <Trash2 size={12} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {products.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-muted-text font-body mb-4">No products yet</p>
+                <Button onClick={() => { setEditingProduct(null); resetForm(); setShowProductModal(true); }}>
+                  <Plus size={16} className="mr-2" /> Add Your First Jersey
+                </Button>
               </div>
             )}
           </TabsContent>
 
-          {/* Orders Tab */}
-          <TabsContent value="orders">
-            {orders.length > 0 ? (
-              <div className="space-y-4">
-                {orders.map((order) => (
-                  <div key={order.order_id} className="bg-white p-6 border border-black/10">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                      <div>
-                        <span className="font-mono text-sm">{order.order_id}</span>
-                        <div className="flex items-center gap-4 mt-2 font-body text-sm text-muted-text">
-                          <span>{new Date(order.created_at).toLocaleDateString()}</span>
-                          <span className="capitalize">{order.order_status}</span>
+          {/* Performance Insights Tab */}
+          <TabsContent value="insights">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Top Sellers */}
+              <div className="bg-white border border-black/10 p-6">
+                <h3 className="font-heading text-lg mb-4 flex items-center gap-2">
+                  <TrendingUp size={18} /> Top Selling Jerseys
+                </h3>
+                {dashboard?.top_sellers?.length > 0 ? (
+                  <div className="space-y-3">
+                    {dashboard.top_sellers.map((product, index) => (
+                      <div key={product.product_id} className="flex items-center gap-3 p-3 bg-bone-white">
+                        <span className="font-heading text-xl text-muted-text w-6">#{index + 1}</span>
+                        <img src={product.images?.[0]} alt={product.name} className="w-12 h-12 object-cover" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-body text-sm font-medium truncate">{product.name}</p>
+                          <p className="font-body text-xs text-muted-text">{product.total_sold} sold</p>
                         </div>
+                        <p className="font-body text-sm font-semibold text-ghana-green">${product.total_revenue?.toFixed(2)}</p>
                       </div>
-                      <span className="font-body text-xl font-medium">{order.currency} {order.total?.toFixed(2)}</span>
-                    </div>
-                    <div className="border-t border-black/10 pt-4">
-                      {order.items?.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-4 py-2">
-                          <div className="w-12 h-12 bg-gray-100">
-                            <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                          </div>
-                          <div className="flex-1">
-                            <span className="font-body text-sm">{item.name}</span>
-                            <span className="font-body text-xs text-muted-text block">Size: {item.size} × {item.quantity}</span>
-                          </div>
-                          <span className="font-body">{order.currency} {(item.price * item.quantity).toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <p className="text-muted-text font-body text-center py-8">No sales data yet</p>
+                )}
               </div>
-            ) : (
-              <div className="text-center py-16 bg-white border border-black/10">
-                <ShoppingBag size={48} className="mx-auto text-muted-text mb-4" />
-                <h3 className="font-heading text-lg tracking-widest uppercase mb-2">No orders yet</h3>
-                <p className="font-body text-muted-text">Orders will appear here when customers purchase your products</p>
+
+              {/* Quick Stats */}
+              <div className="bg-white border border-black/10 p-6">
+                <h3 className="font-heading text-lg mb-4 flex items-center gap-2">
+                  <ThumbsUp size={18} /> Jersey Votes
+                </h3>
+                <div className="space-y-3">
+                  {products.filter(p => p.vote_count > 0).sort((a, b) => b.vote_count - a.vote_count).slice(0, 5).map((product, index) => (
+                    <div key={product.product_id} className="flex items-center gap-3 p-3 bg-bone-white">
+                      <span className="font-heading text-xl text-ashanti-gold w-6">#{index + 1}</span>
+                      <img src={product.images?.[0]} alt={product.name} className="w-12 h-12 object-cover" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-body text-sm font-medium truncate">{product.name}</p>
+                      </div>
+                      <p className="font-body text-lg font-semibold">{product.vote_count} <span className="text-xs text-muted-text">votes</span></p>
+                    </div>
+                  ))}
+                  {products.filter(p => p.vote_count > 0).length === 0 && (
+                    <p className="text-muted-text font-body text-center py-8">No votes yet</p>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
+          </TabsContent>
+
+          {/* Promos Tab */}
+          <TabsContent value="promos">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-heading text-lg">Your Promo Codes</h3>
+              <Dialog open={showPromoModal} onOpenChange={setShowPromoModal}>
+                <DialogTrigger asChild>
+                  <Button className="bg-black text-white hover:bg-ashanti-gold hover:text-black">
+                    <Plus size={16} className="mr-2" /> Create Promo
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="font-heading">Create Promo Code</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreatePromo} className="space-y-4 mt-4">
+                    <div>
+                      <Label>Promo Code</Label>
+                      <Input
+                        value={promoForm.code}
+                        onChange={(e) => setPromoForm({...promoForm, code: e.target.value.toUpperCase()})}
+                        placeholder="SUMMER20"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Discount Type</Label>
+                        <Select
+                          value={promoForm.discount_type}
+                          onValueChange={(value) => setPromoForm({...promoForm, discount_type: value})}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">Percentage (%)</SelectItem>
+                            <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Discount Value</Label>
+                        <Input
+                          type="number"
+                          value={promoForm.discount_value}
+                          onChange={(e) => setPromoForm({...promoForm, discount_value: e.target.value})}
+                          placeholder={promoForm.discount_type === "percentage" ? "20" : "10.00"}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Min Purchase (optional)</Label>
+                        <Input
+                          type="number"
+                          value={promoForm.min_purchase}
+                          onChange={(e) => setPromoForm({...promoForm, min_purchase: e.target.value})}
+                          placeholder="50.00"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>Max Uses (optional)</Label>
+                        <Input
+                          type="number"
+                          value={promoForm.max_uses}
+                          onChange={(e) => setPromoForm({...promoForm, max_uses: e.target.value})}
+                          placeholder="100"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                    <Button type="submit" className="w-full bg-black">Create Promo Code</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {promos.map((promo) => (
+                <div key={promo.promo_id} className="bg-white border border-black/10 p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h4 className="font-heading text-lg">{promo.code}</h4>
+                      <p className="font-body text-sm text-ashanti-gold">
+                        {promo.discount_type === "percentage" ? `${promo.discount_value}% OFF` : `$${promo.discount_value} OFF`}
+                      </p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      className="text-ghana-red"
+                      onClick={() => handleDeletePromo(promo.promo_id)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                  <div className="space-y-1 text-xs font-body text-muted-text">
+                    {promo.min_purchase && <p>Min purchase: ${promo.min_purchase}</p>}
+                    {promo.max_uses && <p>Max uses: {promo.max_uses} ({promo.uses || 0} used)</p>}
+                  </div>
+                </div>
+              ))}
+              {promos.length === 0 && (
+                <p className="text-center text-muted-text py-8 font-body col-span-full">No promo codes created yet</p>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Support Tab */}
+          <TabsContent value="support">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white border border-black/10 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <MessageSquare size={24} className="text-ashanti-gold" />
+                  <h3 className="font-heading text-lg">Contact Support</h3>
+                </div>
+                <p className="font-body text-sm text-muted-text mb-4">
+                  Need help with your store? Our support team is here to assist you.
+                </p>
+                <Button className="w-full bg-black hover:bg-ashanti-gold hover:text-black">
+                  Contact Admin
+                </Button>
+              </div>
+
+              <div className="bg-white border border-black/10 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <FileText size={24} className="text-ashanti-gold" />
+                  <h3 className="font-heading text-lg">Seller Guidelines</h3>
+                </div>
+                <p className="font-body text-sm text-muted-text mb-4">
+                  Review our guidelines for listing products and maintaining quality standards.
+                </p>
+                <ul className="font-body text-sm space-y-2 mb-4">
+                  <li>• High-quality product images required</li>
+                  <li>• Accurate descriptions and sizing</li>
+                  <li>• Respond to orders within 24 hours</li>
+                  <li>• Ship within 3 business days</li>
+                </ul>
+                <Button variant="outline" className="w-full border-black">
+                  Read Full Guidelines
+                </Button>
+              </div>
+
+              <div className="bg-white border border-black/10 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <CreditCard size={24} className="text-ashanti-gold" />
+                  <h3 className="font-heading text-lg">Payout Policy</h3>
+                </div>
+                <p className="font-body text-sm text-muted-text mb-4">
+                  Understand how and when you get paid for your sales.
+                </p>
+                <ul className="font-body text-sm space-y-2 mb-4">
+                  <li>• Platform commission: 15%</li>
+                  <li>• Payout after delivery confirmation</li>
+                  <li>• Weekly payout schedule</li>
+                  <li>• Minimum payout: $50</li>
+                </ul>
+                <Button variant="outline" className="w-full border-black">
+                  View Payout Details
+                </Button>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
