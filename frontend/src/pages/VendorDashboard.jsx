@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   Package, Plus, Edit2, Trash2, Eye, Clock, CheckCircle, XCircle, 
   ShoppingBag, DollarSign, TrendingUp, AlertTriangle, Copy, Pause, Play,
@@ -19,12 +19,14 @@ import axios from "axios";
 
 const VendorDashboard = () => {
   const { user, token } = useAuth();
+  const navigate = useNavigate();
   const [dashboard, setDashboard] = useState(null);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [promos, setPromos] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [vendorStatus, setVendorStatus] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -65,8 +67,46 @@ const VendorDashboard = () => {
   const sizes = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
 
   useEffect(() => {
-    fetchData();
+    checkVendorStatusAndFetch();
   }, [token]);
+
+  const checkVendorStatusAndFetch = async () => {
+    if (!token) return;
+    
+    // Admins bypass status check
+    if (user?.role === "admin") {
+      fetchData();
+      return;
+    }
+    
+    try {
+      // First check vendor onboarding status
+      const statusRes = await axios.get(`${API}/vendor/onboarding-status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const status = statusRes.data.vendor_status;
+      setVendorStatus(status);
+      
+      // Redirect unapproved vendors to onboarding
+      if (status === "pending_onboarding") {
+        navigate("/vendor/onboarding");
+        return;
+      }
+      
+      // If pending approval or approved, fetch dashboard data
+      if (status === "approved") {
+        fetchData();
+      }
+    } catch (error) {
+      console.error("Failed to check vendor status:", error);
+      // If 403, redirect to onboarding
+      if (error.response?.status === 403) {
+        navigate("/vendor/onboarding");
+      }
+      setLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -299,6 +339,59 @@ const VendorDashboard = () => {
         <div className="pt-12 flex items-center justify-center min-h-[60vh]">
           <div className="w-12 h-12 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
         </div>
+      </div>
+    );
+  }
+
+  // Show pending approval screen for vendors awaiting approval
+  if (vendorStatus === "pending_approval") {
+    return (
+      <div className="min-h-screen bg-bone-white">
+        <Header forceLight={true} stickyAnnouncement={true} />
+        <div className="pt-12 pb-24 px-6 md:px-12 max-w-2xl mx-auto text-center">
+          <div className="bg-ashanti-gold/10 border border-ashanti-gold/30 p-8 mt-12">
+            <Clock size={48} className="mx-auto text-ashanti-gold mb-4" />
+            <h1 className="font-heading text-2xl mb-4">Application Under Review</h1>
+            <p className="font-body text-muted-text mb-6">
+              Thank you for submitting your vendor application! Our team is carefully reviewing your information to ensure quality standards on our platform.
+            </p>
+            <p className="font-body text-sm text-muted-text mb-4">
+              This process usually takes 1-2 business days. You will receive a notification once your application is approved.
+            </p>
+            <div className="bg-white p-4 border border-black/10 mt-6">
+              <p className="font-body text-xs text-muted-text uppercase tracking-wider mb-2">Need Help?</p>
+              <p className="font-body text-sm">
+                Contact us at <a href="mailto:vendors@ghanajersey.co" className="text-ashanti-gold underline">vendors@ghanajersey.co</a>
+              </p>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Show rejected screen
+  if (vendorStatus === "rejected") {
+    return (
+      <div className="min-h-screen bg-bone-white">
+        <Header forceLight={true} stickyAnnouncement={true} />
+        <div className="pt-12 pb-24 px-6 md:px-12 max-w-2xl mx-auto text-center">
+          <div className="bg-ghana-red/10 border border-ghana-red/30 p-8 mt-12">
+            <XCircle size={48} className="mx-auto text-ghana-red mb-4" />
+            <h1 className="font-heading text-2xl mb-4">Application Not Approved</h1>
+            <p className="font-body text-muted-text mb-6">
+              Unfortunately, your vendor application was not approved at this time. This may be due to incomplete information or not meeting our quality standards.
+            </p>
+            <Button 
+              className="bg-black hover:bg-ashanti-gold hover:text-black"
+              onClick={() => navigate("/vendor/onboarding")}
+            >
+              Resubmit Application
+            </Button>
+          </div>
+        </div>
+        <Footer />
       </div>
     );
   }

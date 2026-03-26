@@ -21,6 +21,7 @@ import SellYourJerseyPage from "./pages/SellYourJerseyPage";
 import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import ComparePage from "./pages/ComparePage";
+import VendorOnboarding from "./pages/VendorOnboarding";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -298,6 +299,11 @@ function AppRouter() {
       <Route path="/vendor" element={
         <ProtectedRoute allowedRoles={["vendor", "admin"]}>
           <VendorDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/vendor/onboarding" element={
+        <ProtectedRoute allowedRoles={["vendor"]}>
+          <VendorOnboarding />
         </ProtectedRoute>
       } />
       <Route path="/admin" element={

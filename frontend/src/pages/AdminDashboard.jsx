@@ -3,11 +3,12 @@ import { Link } from "react-router-dom";
 import { 
   LayoutDashboard, Package, Users, ShoppingCart, DollarSign, 
   CheckCircle, XCircle, Star, Clock, TrendingUp, Eye, ChevronDown,
-  Percent, ThumbsUp, AlertCircle, CreditCard
+  Percent, ThumbsUp, AlertCircle, CreditCard, UserPlus, Building, MapPin, Phone
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Header, Footer } from "./LandingPage";
 import { useAuth, API } from "../App";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ const AdminDashboard = () => {
   const { token } = useAuth();
   const [dashboard, setDashboard] = useState(null);
   const [pendingProducts, setPendingProducts] = useState([]);
+  const [pendingVendors, setPendingVendors] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [vendorAnalytics, setVendorAnalytics] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -25,6 +27,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [vendorProducts, setVendorProducts] = useState([]);
+  const [selectedOnboarding, setSelectedOnboarding] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -32,14 +35,15 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [dashboardRes, pendingRes, vendorsRes, ordersRes, customersRes, vendorAnalyticsRes, votingRes] = await Promise.all([
+      const [dashboardRes, pendingRes, vendorsRes, ordersRes, customersRes, vendorAnalyticsRes, votingRes, pendingVendorsRes] = await Promise.all([
         axios.get(`${API}/admin/dashboard`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/admin/products/pending`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/admin/vendors`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/admin/orders`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/admin/customers`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`${API}/admin/analytics/vendors`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API}/admin/voting-stats`, { headers: { Authorization: `Bearer ${token}` } })
+        axios.get(`${API}/admin/voting-stats`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API}/admin/vendors/pending`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
       setDashboard(dashboardRes.data);
       setPendingProducts(pendingRes.data);
@@ -48,6 +52,7 @@ const AdminDashboard = () => {
       setCustomers(customersRes.data);
       setVendorAnalytics(vendorAnalyticsRes.data);
       setVotingStats(votingRes.data);
+      setPendingVendors(pendingVendorsRes.data);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -100,6 +105,19 @@ const AdminDashboard = () => {
       fetchData();
     } catch (error) {
       toast.error("Failed to update order");
+    }
+  };
+
+  const handleApproveVendor = async (userId, approved, rejectionReason = null) => {
+    try {
+      await axios.put(`${API}/admin/vendors/${userId}/approve?approved=${approved}${rejectionReason ? `&rejection_reason=${encodeURIComponent(rejectionReason)}` : ''}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`Vendor ${approved ? 'approved' : 'rejected'} successfully`);
+      setSelectedOnboarding(null);
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to update vendor status");
     }
   };
 
@@ -222,8 +240,14 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="vendors" className="w-full">
+        <Tabs defaultValue="onboarding" className="w-full">
           <TabsList className="bg-transparent border-b border-black/10 w-full justify-start rounded-none h-auto p-0 mb-8 overflow-x-auto flex-nowrap">
+            <TabsTrigger 
+              value="onboarding" 
+              className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-4 whitespace-nowrap"
+            >
+              Onboarding {pendingVendors.length > 0 && <span className="ml-1 bg-ghana-red text-white text-xs px-2 py-0.5 rounded-full">{pendingVendors.length}</span>}
+            </TabsTrigger>
             <TabsTrigger 
               value="vendors" 
               className="font-body text-sm uppercase tracking-widest rounded-none data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:bg-transparent py-4 px-4 whitespace-nowrap"
@@ -255,6 +279,77 @@ const AdminDashboard = () => {
               Customers
             </TabsTrigger>
           </TabsList>
+
+          {/* Vendor Onboarding Applications Tab */}
+          <TabsContent value="onboarding">
+            <div className="space-y-6">
+              <div className="bg-ashanti-gold/10 border border-ashanti-gold/30 p-4 mb-6">
+                <h3 className="font-heading text-lg mb-2 flex items-center gap-2">
+                  <UserPlus size={20} /> Vendor Onboarding Applications
+                </h3>
+                <p className="font-body text-sm text-muted-text">
+                  Review and approve new vendor applications. Ensure they meet quality standards before granting access to the platform.
+                </p>
+              </div>
+
+              {pendingVendors.length === 0 ? (
+                <div className="text-center py-12">
+                  <CheckCircle size={48} className="mx-auto text-ghana-green mb-4" />
+                  <p className="font-body text-muted-text">No pending vendor applications</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {pendingVendors.map((vendor) => (
+                    <div key={vendor.user_id} className="bg-white border border-black/10 overflow-hidden" data-testid={`vendor-application-${vendor.user_id}`}>
+                      <div className="p-4 bg-black text-white">
+                        <h3 className="font-heading text-lg">{vendor.onboarding_data?.identity?.business_name || vendor.name}</h3>
+                        <p className="font-body text-xs text-white/70">{vendor.email}</p>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Building size={14} className="text-muted-text" />
+                          <span className="font-body">{vendor.onboarding_data?.identity?.full_name}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <MapPin size={14} className="text-muted-text" />
+                          <span className="font-body">{vendor.onboarding_data?.identity?.city_location || "Not specified"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Phone size={14} className="text-muted-text" />
+                          <span className="font-body">{vendor.onboarding_data?.identity?.phone_number || "Not specified"}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="font-body text-muted-text">Experience: </span>
+                          <span className="font-body capitalize">{vendor.onboarding_data?.identity?.years_in_business?.replace(/_/g, " ") || "Unknown"}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="font-body text-muted-text">Monthly Sales: </span>
+                          <span className="font-body capitalize">{vendor.onboarding_data?.business?.jerseys_per_month?.replace(/_/g, " ") || "Unknown"}</span>
+                        </div>
+                      </div>
+                      <div className="p-4 border-t border-black/10 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 border-black"
+                          onClick={() => setSelectedOnboarding(vendor)}
+                        >
+                          <Eye size={14} className="mr-1" /> Review
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-ghana-green hover:bg-ghana-green/80"
+                          onClick={() => handleApproveVendor(vendor.user_id, true)}
+                        >
+                          <CheckCircle size={14} className="mr-1" /> Approve
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
 
           {/* Vendors & Earnings Tab */}
           <TabsContent value="vendors">
@@ -552,6 +647,233 @@ const AdminDashboard = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Vendor Onboarding Detail Modal */}
+      <Dialog open={!!selectedOnboarding} onOpenChange={() => setSelectedOnboarding(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading tracking-widest uppercase">
+              Vendor Application Review
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedOnboarding && (
+            <div className="space-y-6 mt-4">
+              {/* Identity Section */}
+              <div className="border border-black/10 p-4">
+                <h3 className="font-heading text-sm uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Building size={16} /> Vendor Identity
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-text">Full Name:</span>
+                    <p className="font-medium">{selectedOnboarding.onboarding_data?.identity?.full_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Business Name:</span>
+                    <p className="font-medium">{selectedOnboarding.onboarding_data?.identity?.business_name}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Phone:</span>
+                    <p className="font-medium">{selectedOnboarding.onboarding_data?.identity?.phone_number}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Email:</span>
+                    <p className="font-medium">{selectedOnboarding.onboarding_data?.identity?.email}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Location:</span>
+                    <p className="font-medium">{selectedOnboarding.onboarding_data?.identity?.city_location}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Experience:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.identity?.years_in_business?.replace(/_/g, " ")}</p>
+                  </div>
+                </div>
+                {selectedOnboarding.onboarding_data?.identity?.social_handles?.length > 0 && (
+                  <div className="mt-3">
+                    <span className="text-muted-text text-sm">Social Media:</span>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedOnboarding.onboarding_data.identity.social_handles.map((h, i) => (
+                        <span key={i} className="bg-black/5 px-2 py-1 text-xs">
+                          {h.platform}: {h.handle}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Business Section */}
+              <div className="border border-black/10 p-4">
+                <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Business Legitimacy</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-text">Selling Mode:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.business?.sells_online_offline}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Monthly Sales:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.business?.jerseys_per_month?.replace(/_/g, " ")}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-muted-text">Platforms:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.business?.selling_platforms?.join(", ")?.replace(/_/g, " ")}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Inventory & Production */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border border-black/10 p-4">
+                  <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Inventory</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-muted-text">Stock Type:</span>
+                      <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.inventory?.keeps_stock?.replace(/_/g, " ")}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-text">Stock Quantity:</span>
+                      <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.inventory?.stock_quantity?.replace(/_/g, " ")}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-text">Sizes:</span>
+                      <p className="font-medium">{selectedOnboarding.onboarding_data?.inventory?.stock_sizes?.join(", ")}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="border border-black/10 p-4">
+                  <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Production</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-muted-text">Weekly Capacity:</span>
+                      <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.production?.weekly_capacity?.replace(/_/g, " ")}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-text">Production Time:</span>
+                      <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.production?.production_time?.replace(/_/g, " ")}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery */}
+              <div className="border border-black/10 p-4">
+                <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Delivery Capability</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-text">Methods:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.delivery?.delivery_methods?.join(", ")?.replace(/_/g, " ")}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">City Delivery Time:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.delivery?.city_delivery_time?.replace(/_/g, " ")}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Outside City:</span>
+                    <p className="font-medium">{selectedOnboarding.onboarding_data?.delivery?.delivers_outside_city ? "Yes" : "No"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Outside Ghana:</span>
+                    <p className="font-medium">{selectedOnboarding.onboarding_data?.delivery?.delivers_outside_ghana ? "Yes" : "No"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quality */}
+              <div className="border border-black/10 p-4">
+                <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Quality & Source</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-text">Jersey Source:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.quality?.jersey_source?.replace(/_/g, " ")}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-text">Materials:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.quality?.materials?.join(", ")?.replace(/_/g, " ")}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Verification Images */}
+              <div className="border border-black/10 p-4">
+                <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Verification Images</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  {selectedOnboarding.onboarding_data?.verification?.jersey_photos?.filter(p => p).map((photo, idx) => (
+                    <div key={idx} className="aspect-square bg-gray-100 border border-black/10 overflow-hidden">
+                      <img 
+                        src={photo.startsWith('http') ? photo : `${API}/files/${photo}`}
+                        alt={`Jersey ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => e.target.src = 'https://via.placeholder.com/200?text=Image'}
+                      />
+                    </div>
+                  ))}
+                  {selectedOnboarding.onboarding_data?.verification?.packaging_photo && (
+                    <div className="aspect-square bg-gray-100 border border-black/10 overflow-hidden">
+                      <img 
+                        src={selectedOnboarding.onboarding_data.verification.packaging_photo.startsWith('http') ? selectedOnboarding.onboarding_data.verification.packaging_photo : `${API}/files/${selectedOnboarding.onboarding_data.verification.packaging_photo}`}
+                        alt="Packaging"
+                        className="w-full h-full object-cover"
+                        onError={(e) => e.target.src = 'https://via.placeholder.com/200?text=Image'}
+                      />
+                    </div>
+                  )}
+                </div>
+                {(!selectedOnboarding.onboarding_data?.verification?.jersey_photos?.some(p => p) && 
+                  !selectedOnboarding.onboarding_data?.verification?.packaging_photo) && (
+                  <p className="text-muted-text text-sm">No images uploaded</p>
+                )}
+              </div>
+
+              {/* Commitments */}
+              <div className="border border-black/10 p-4">
+                <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Commitments</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    {selectedOnboarding.onboarding_data?.commitment?.fulfill_on_time ? 
+                      <CheckCircle size={16} className="text-ghana-green" /> : 
+                      <XCircle size={16} className="text-ghana-red" />}
+                    <span>Fulfill orders on time</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedOnboarding.onboarding_data?.commitment?.fulfill_through_platform ? 
+                      <CheckCircle size={16} className="text-ghana-green" /> : 
+                      <XCircle size={16} className="text-ghana-red" />}
+                    <span>Fulfill through platform</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedOnboarding.onboarding_data?.commitment?.agree_terms ? 
+                      <CheckCircle size={16} className="text-ghana-green" /> : 
+                      <XCircle size={16} className="text-ghana-red" />}
+                    <span>Agreed to terms & conditions</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-4 border-t border-black/10">
+                <Button
+                  className="flex-1 bg-ghana-green hover:bg-ghana-green/80"
+                  onClick={() => handleApproveVendor(selectedOnboarding.user_id, true)}
+                >
+                  <CheckCircle size={16} className="mr-2" /> Approve Vendor
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 border-ghana-red text-ghana-red hover:bg-ghana-red hover:text-white"
+                  onClick={() => {
+                    const reason = prompt("Enter rejection reason (optional):");
+                    handleApproveVendor(selectedOnboarding.user_id, false, reason);
+                  }}
+                >
+                  <XCircle size={16} className="mr-2" /> Reject Application
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

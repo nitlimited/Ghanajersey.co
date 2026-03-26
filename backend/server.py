@@ -1,5 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Cookie
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Cookie, UploadFile, File
+from fastapi.responses import JSONResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -15,6 +15,7 @@ import bcrypt
 import httpx
 import hmac
 import hashlib
+import requests
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -32,6 +33,12 @@ JWT_EXPIRATION_HOURS = int(os.environ.get('JWT_EXPIRATION_HOURS', 168))
 # Stripe Config
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
 
+# Object Storage Config
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+APP_NAME = "blackstar-threads"
+storage_key = None
+
 # Create the main app
 app = FastAPI(title="Black Star Threads API", version="1.0.0")
 
@@ -44,6 +51,67 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# ==================== OBJECT STORAGE FUNCTIONS ====================
+
+def init_storage():
+    """Initialize storage - call once at startup, returns reusable storage_key"""
+    global storage_key
+    if storage_key:
+        return storage_key
+    
+    if not EMERGENT_LLM_KEY:
+        logger.error("EMERGENT_LLM_KEY not set, storage unavailable")
+        return None
+    
+    try:
+        resp = requests.post(
+            f"{STORAGE_URL}/init",
+            json={"emergent_key": EMERGENT_LLM_KEY},
+            timeout=30
+        )
+        resp.raise_for_status()
+        storage_key = resp.json()["storage_key"]
+        logger.info("Object storage initialized successfully")
+        return storage_key
+    except Exception as e:
+        logger.error(f"Failed to initialize storage: {e}")
+        return None
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    """Upload file to object storage"""
+    key = init_storage()
+    if not key:
+        raise HTTPException(status_code=500, detail="Storage not initialized")
+    
+    resp = requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data,
+        timeout=120
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+def get_object(path: str) -> tuple:
+    """Download file from object storage"""
+    key = init_storage()
+    if not key:
+        raise HTTPException(status_code=500, detail="Storage not initialized")
+    
+    resp = requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key},
+        timeout=60
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+MIME_TYPES = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+    "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf",
+    "json": "application/json", "csv": "text/csv", "txt": "text/plain"
+}
 
 # ==================== PYDANTIC MODELS ====================
 
@@ -250,6 +318,64 @@ class DiscountCodeCreate(BaseModel):
 class NewsletterSubscribe(BaseModel):
     email: EmailStr
 
+# Vendor Onboarding Models
+class VendorIdentity(BaseModel):
+    full_name: str
+    business_name: str
+    phone_number: str
+    email: str
+    city_location: str
+    social_handles: List[dict] = []  # [{platform: str, handle: str}]
+    years_in_business: str  # "less_than_6_months", "6_months_to_1_year", "1_to_3_years", "3_plus_years"
+
+class BusinessLegitimacy(BaseModel):
+    sells_online_offline: str  # "online", "offline", "both"
+    selling_platforms: List[str] = []  # instagram, whatsapp, physical_shop, tiktok, other_website, multiple
+    jerseys_per_month: str  # "1_10", "10_30", "30_100", "100_plus"
+
+class InventoryInfo(BaseModel):
+    keeps_stock: str  # "yes_ready_to_ship", "no_made_after_order"
+    stock_quantity: str  # "1_20", "20_50", "50_100", "100_plus"
+    stock_sizes: List[str] = []  # S, M, L, XL, XXL
+
+class ProductionCapacity(BaseModel):
+    weekly_capacity: str  # "5_10", "10_30", "30_100", "100_plus"
+    production_time: str  # "same_day", "1_2_days", "3_5_days", "1_week_plus"
+
+class DeliveryCapability(BaseModel):
+    delivery_methods: List[str] = []  # bolt, courier, ghana_post, pickup, multiple
+    city_delivery_time: str  # "same_day", "1_2_days", "2_4_days", "5_plus_days"
+    delivers_outside_city: bool = False
+    delivers_outside_ghana: bool = False
+    accra_delivery_time: Optional[str] = None
+    central_western_delivery_time: Optional[str] = None
+    eastern_volta_delivery_time: Optional[str] = None
+    ashanti_bono_delivery_time: Optional[str] = None
+    northern_upper_delivery_time: Optional[str] = None
+
+class QualityInfo(BaseModel):
+    jersey_source: str  # "design_produce", "source_suppliers", "both"
+    materials: List[str] = []  # polyester, mesh, breathable_performance
+
+class VendorCommitment(BaseModel):
+    fulfill_on_time: bool = False
+    fulfill_through_platform: bool = False
+    agree_terms: bool = False
+
+class VendorVerification(BaseModel):
+    jersey_photos: List[str] = []  # URLs of uploaded photos
+    packaging_photo: Optional[str] = None
+
+class VendorOnboardingSubmit(BaseModel):
+    identity: VendorIdentity
+    business: BusinessLegitimacy
+    inventory: InventoryInfo
+    production: ProductionCapacity
+    delivery: DeliveryCapability
+    quality: QualityInfo
+    commitment: VendorCommitment
+    verification: VendorVerification
+
 # ==================== HELPER FUNCTIONS ====================
 
 def hash_password(password: str) -> str:
@@ -323,6 +449,16 @@ async def get_vendor_user(request: Request, session_token: Optional[str] = Cooki
     user = await get_current_user(request, session_token)
     if user["role"] not in ["vendor", "admin"]:
         raise HTTPException(status_code=403, detail="Vendor access required")
+    
+    # Check if vendor is approved (admins bypass this check)
+    if user["role"] == "vendor":
+        vendor_status = user.get("vendor_status", "pending_onboarding")
+        if vendor_status != "approved":
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Vendor not approved. Current status: {vendor_status}"
+            )
+    
     return user
 
 # ==================== AUTH ROUTES ====================
@@ -346,7 +482,8 @@ async def register(user_data: UserCreate):
         "picture": None,
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "vendor_profile": None
+        "vendor_profile": None,
+        "vendor_status": "pending_onboarding" if user_data.role == "vendor" else None
     }
     
     await db.users.insert_one(user_doc)
@@ -491,13 +628,161 @@ async def logout(request: Request, session_token: Optional[str] = Cookie(None)):
 
 # ==================== VENDOR ROUTES ====================
 
+# Vendor onboarding status check (doesn't require approved status)
+@api_router.get("/vendor/onboarding-status")
+async def get_vendor_onboarding_status(user: dict = Depends(get_current_user)):
+    if user.get("role") != "vendor":
+        raise HTTPException(status_code=403, detail="Not a vendor account")
+    
+    vendor_status = user.get("vendor_status", "pending_onboarding")
+    onboarding_data = user.get("onboarding_data")
+    
+    return {
+        "user_id": user["user_id"],
+        "email": user["email"],
+        "name": user["name"],
+        "vendor_status": vendor_status,  # pending_onboarding, pending_approval, approved, rejected
+        "has_completed_onboarding": onboarding_data is not None,
+        "rejection_reason": user.get("rejection_reason")
+    }
+
+@api_router.post("/vendor/onboarding")
+async def submit_vendor_onboarding(data: VendorOnboardingSubmit, user: dict = Depends(get_current_user)):
+    if user.get("role") != "vendor":
+        raise HTTPException(status_code=403, detail="Not a vendor account")
+    
+    # Check if already submitted
+    if user.get("vendor_status") == "pending_approval":
+        raise HTTPException(status_code=400, detail="Onboarding already submitted, awaiting approval")
+    
+    if user.get("vendor_status") == "approved":
+        raise HTTPException(status_code=400, detail="Vendor already approved")
+    
+    # Store onboarding data
+    onboarding_doc = {
+        "identity": data.identity.model_dump(),
+        "business": data.business.model_dump(),
+        "inventory": data.inventory.model_dump(),
+        "production": data.production.model_dump(),
+        "delivery": data.delivery.model_dump(),
+        "quality": data.quality.model_dump(),
+        "commitment": data.commitment.model_dump(),
+        "verification": data.verification.model_dump(),
+        "submitted_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Update vendor profile with business info
+    vendor_profile = {
+        "brand_name": data.identity.business_name,
+        "phone": data.identity.phone_number,
+        "location": data.identity.city_location,
+        "social_handles": data.identity.social_handles
+    }
+    
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {
+            "onboarding_data": onboarding_doc,
+            "vendor_status": "pending_approval",
+            "vendor_profile": vendor_profile
+        }}
+    )
+    
+    return {"message": "Onboarding submitted successfully. Your application is pending admin approval."}
+
+# File upload endpoint for vendor onboarding
+@api_router.post("/upload/vendor-image")
+async def upload_vendor_image(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user)
+):
+    """Upload an image for vendor onboarding verification"""
+    if user.get("role") != "vendor":
+        raise HTTPException(status_code=403, detail="Only vendors can upload verification images")
+    
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only image files are allowed (jpeg, png, webp, gif)")
+    
+    # Read file data
+    data = await file.read()
+    
+    # Limit file size (5MB)
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size must be less than 5MB")
+    
+    # Generate unique path
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    file_path = f"{APP_NAME}/vendor-onboarding/{user['user_id']}/{uuid.uuid4().hex[:12]}.{ext}"
+    
+    try:
+        result = put_object(file_path, data, file.content_type)
+        
+        # Store file reference in database
+        file_doc = {
+            "file_id": str(uuid.uuid4()),
+            "storage_path": result["path"],
+            "original_filename": file.filename,
+            "content_type": file.content_type,
+            "size": result.get("size", len(data)),
+            "user_id": user["user_id"],
+            "is_deleted": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.uploaded_files.insert_one(file_doc)
+        
+        return {
+            "file_id": file_doc["file_id"],
+            "path": result["path"],
+            "url": f"/api/files/{result['path']}",
+            "size": file_doc["size"]
+        }
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload file")
+
+# Serve uploaded files
+@api_router.get("/files/{path:path}")
+async def get_file(path: str, request: Request, auth: Optional[str] = None):
+    """Serve uploaded files"""
+    # Auth check via header or query param
+    auth_header = request.headers.get("Authorization")
+    token = None
+    
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    elif auth:
+        token = auth
+    
+    # For public vendor images, allow access without auth
+    if not path.startswith(f"{APP_NAME}/vendor-onboarding/"):
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Check file exists in DB
+    file_record = await db.uploaded_files.find_one({"storage_path": path, "is_deleted": False})
+    if not file_record:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        data, content_type = get_object(path)
+        return Response(
+            content=data,
+            media_type=file_record.get("content_type", content_type)
+        )
+    except Exception as e:
+        logger.error(f"Failed to retrieve file: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve file")
+
 @api_router.get("/vendor/profile")
 async def get_vendor_profile(user: dict = Depends(get_vendor_user)):
     return {
         "user_id": user["user_id"],
         "email": user["email"],
         "name": user["name"],
-        "vendor_profile": user.get("vendor_profile")
+        "vendor_profile": user.get("vendor_profile"),
+        "vendor_status": user.get("vendor_status", "approved")
     }
 
 @api_router.put("/vendor/profile")
@@ -1883,11 +2168,12 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
         # Get vote counts for vendor's products
         total_votes = sum(p.get("vote_count", 0) for p in products)
         
+        vendor_profile = vendor.get("vendor_profile") or {}
         vendor_analytics.append({
             "vendor_id": vendor_id,
             "name": vendor.get("name"),
             "email": vendor.get("email"),
-            "brand_name": vendor.get("vendor_profile", {}).get("brand_name"),
+            "brand_name": vendor_profile.get("brand_name") if vendor_profile else None,
             "total_products": len(products),
             "approved_products": len([p for p in products if p.get("status") == "approved"]),
             "pending_products": len([p for p in products if p.get("status") == "pending"]),
@@ -1974,6 +2260,51 @@ async def get_all_vendors(user: dict = Depends(get_admin_user)):
             vendor['created_at'] = datetime.fromisoformat(vendor['created_at'])
     
     return vendors
+
+@api_router.get("/admin/vendors/pending")
+async def get_pending_vendors(user: dict = Depends(get_admin_user)):
+    """Get vendors pending approval"""
+    vendors = await db.users.find(
+        {"role": "vendor", "vendor_status": "pending_approval"},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+    
+    for vendor in vendors:
+        if isinstance(vendor.get('created_at'), str):
+            vendor['created_at'] = datetime.fromisoformat(vendor['created_at'])
+    
+    return vendors
+
+@api_router.put("/admin/vendors/{user_id}/approve")
+async def approve_vendor(user_id: str, approved: bool, rejection_reason: Optional[str] = None, user: dict = Depends(get_admin_user)):
+    """Approve or reject a vendor application"""
+    vendor = await db.users.find_one({"user_id": user_id, "role": "vendor"})
+    
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    if approved:
+        update_data = {
+            "vendor_status": "approved",
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "approved_by": user["user_id"]
+        }
+    else:
+        update_data = {
+            "vendor_status": "rejected",
+            "rejection_reason": rejection_reason,
+            "rejected_at": datetime.now(timezone.utc).isoformat(),
+            "rejected_by": user["user_id"]
+        }
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": update_data}
+    )
+    
+    # TODO: Send email notification to vendor
+    
+    return {"message": f"Vendor {'approved' if approved else 'rejected'}"}
 
 @api_router.put("/admin/vendors/{user_id}/status")
 async def update_vendor_status(user_id: str, is_active: bool, user: dict = Depends(get_admin_user)):
@@ -2110,6 +2441,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
+    # Initialize object storage
+    try:
+        init_storage()
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
+    
     # Create default admin user if not exists
     admin_email = "easante@nitlimited.com"
     admin = await db.users.find_one({"email": admin_email})

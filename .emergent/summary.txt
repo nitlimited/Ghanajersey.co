@@ -1,169 +1,149 @@
-<analysis>**original_problem_statement:**
-Build a modern, scalable international eCommerce web application focused on selling curated Ghanaian jerseys to a global audience.
-
+<analysis>**original_problem_statement:** 
+Build a modern, scalable international eCommerce web application focused on selling curated Ghanaian jerseys (Black Star Threads) to a global audience.
 **PRODUCT REQUIREMENTS:**
-- **User Roles**: Admin, Vendors, Customers.
-- **Vendor Features**: Registration, login, dashboard, profile, product uploads (with admin approval), and management.
-- **Admin Features**: Dashboard, approve/reject listings, manage vendors, orders, payments, customers, and view analytics.
-- **Customer Features**: Premium storefront, browsing by category/price/popularity, product detail pages with images/sizes/reviews, cart, wishlist, and secure checkout.
-- **Payments**: Stripe, PayPal, and Paystack with multi-currency support.
-- **Logistics**: Order tracking, shipping options, and vendor notifications.
-- **Design**: Premium, modern, afro-futurist aesthetic using Ghana-inspired colors (red, gold, green, black).
-- **Logo**: Use the provided  as the logo and site icon.
-- **Subsequent requests added**: Numerous UI/UX updates, new homepage sections, product voting, product comparison, 360-degree view, Sell Your Jersey page, legal pages, and SEO enhancements.
+- **User Roles:** Admin, Vendors, Customers.
+- **Vendor Features:** Comprehensive dashboard (revenue, payouts, orders), product management (add, edit, duplicate, pause), customization options, and a strict multi-step Vendor Onboarding approval process.
+- **Admin Features:** Analytics (platform commission 15%, vendor earnings), approve/reject vendors and products, manage orders.
+- **Customer Features:** Responsive UI, app-like bottom navigation on mobile, full-screen search, front/back hover effect on product cards, voting system (restricted via IP and device fingerprinting), and product customization (Name/Number for +5 fee).
+- **Payments:** Stripe, PayPal, Paystack.
+- **Design:** Premium afro-futurist aesthetic, Ghana-inspired colors. 
 
-**User's preferred language**: English
+**User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
-**what currently exists?**
-A full-stack eCommerce application (Black Star Threads) has been built using a FastAPI backend, React frontend, and MongoDB database.
+**what currently exists?** 
+A functional, feature-rich full-stack eCommerce platform. The frontend features a polished UI with a sticky header, mobile app-style bottom navigation, full-screen search, and product cards with front/back hover effects. Customers can vote on products and add custom names/numbers to jerseys. The backend (FastAPI + MongoDB) supports complex Admin and Vendor dashboards that track revenues, a 15% platform commission, and product statistics.
 
-The application features:
-- A three-role user system (Admin, Vendor, Customer) with JWT and Google OAuth.
-- A complete product lifecycle: Vendors can upload products, which an Admin must approve before they appear on the storefront.
-- Core eCommerce functionalities like a product listing page, product detail pages, shopping cart, and wishlist.
-- Admin, Vendor, and Customer dashboards.
-- Payment integration playbooks for Stripe, PayPal, and Paystack have been retrieved.
-- The UI has undergone several iterative refinements based on user feedback, including changes to the hero banner, header, fonts, colors, and layout of various sections.
-
-**Last working item**:
-The agent started implementing a large set of new features and major changes requested by the user in the last message.
-
--   **Last item agent was working**: The agent began by updating the backend to support new features like product voting. It then created several new static pages (, , , ) and updated  for SEO. The agent is currently in the middle of a major rewrite of the  component to implement a new menu structure and add multiple new content sections as requested.
--   **Status**: IN PROGRESS
--   **Agent Testing Done**: N
--   **Which testing method agent to use?**: both
--   **User Testing Done**: N
+**Last working item**: 
+- **Last item agent was working**: Implementing a strict 9-step **Vendor Onboarding Flow**. The user requested that new vendors must complete a detailed questionnaire (Identity, Legitimacy, Inventory, Capacity, Delivery, Quality, Commitment, Agreement, Verification uploads) and await Admin approval before accessing the Vendor Dashboard. The agent updated backend models/endpoints and created the frontend file .
+- **Status**: IN PROGRESS
+- **Agent Testing Done**: N
+- **Which testing method agent to use?**: both (Backend to test onboarding submissions/admin approvals; Frontend to test the multi-step UI flow).
+- **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-There are no outstanding bugs; the current work is focused on new feature implementation.
+Issue 1: Vendor Onboarding Routing and Admin UI Integration (P0)
+- **Attempted fixes**: Created  and updated the backend dependency  to block unapproved vendors. 
+- **Next debug checklist**: 
+  1. Add  route in .
+  2. Ensure vendor registration redirects to the onboarding page instead of the dashboard.
+  3. Update  to include an Onboarding Applications tab to review submissions and call the  endpoint.
+  4. Implement Object Storage for Step 9 (Uploading jersey and packaging photos).
+- **Why fix this issue and what will be achieved with the fix?**: Completes the user's explicit requirement for vetting vendors before they can sell.
+- **Status**: IN PROGRESS
+- **Is recurring issue?**: N
+- **Should Test frontend/backend/both after fix?**: both
+- **Blocked on other issue**: None.
+
+Issue 2: Customization Details Display in Cart/Checkout (P1)
+- **Attempted fixes**: Updated Cart logic in  and  to accept customization data (Name/Number). 
+- **Next debug checklist**: Ensure the Cart UI overlay/page and the Checkout flow visibly display the custom Name, Number, and the 5 fee breakdown so the customer and vendor can see it.
+- **Why fix this issue**: Prevents order fulfillment errors regarding customized jerseys.
+- **Status**: TESTING PENDING
+- **Is recurring issue?**: N
+- **Should Test frontend/backend/both after fix?**: frontend
 
 **In progress Task List**:
-  - **Task 1: Complete the implementation of the comprehensive feature update (P0)**
-     - **Where to resume**: The  file is being rewritten. The agent has just replaced the main content section using . The next step is to verify this rewrite and continue implementing the other features from the user's latest request.
-     - **What will be achieved with this?**: The application will be updated with a new homepage structure, new informational pages, and new user-facing features like voting and product comparison, aligning it with the user's detailed vision.
-     - **Status**: IN PROGRESS
-     - **Should Test frontend/backend/both after fix?**: both
-     - **Blocked on something**: None.
+Task 1: Complete Vendor Onboarding implementation (P0)
+- **Where to resume**: Review the newly created . Connect it to routing, build out the image upload using  for Object Storage, and build the Admin review UI.
+- **What will be achieved with this?**: A secure, verified multi-vendor marketplace flow.
+- **Status**: IN PROGRESS
+- **Should Test frontend/backend/both after fix?**: both
+- **Blocked on something**: None.
 
-**Upcoming and Future Tasks**
-The following is a breakdown of the pending tasks from the user's most recent request.
+**Upcoming and Future Tasks**:
+- **Email Notifications (P1)**: Integrate email service (Resend/SendGrid) for: Order Confirmations, Vendor Order Received, and Vendor Onboarding Approval. *(Note: User explicitly said skip email we shall integrate later, so keep in backlog until requested).*
+- **GHANA10 Discount Code (P2)**: Implement the checkout logic so the promo code actually applies the discount to the cart total.
+- **Payment Integrations (P2)**: Fully implement PayPal and Paystack (Playbooks retrieved previously but not wired to UI).
+- **360-degree product view (P3)**: Add interactive 360 viewer for jerseys.
+- **Order Tracking (P3)**: Integration with shipping providers.
 
-**Upcoming Tasks (P0):**
--   **Homepage Rework**:
-    -   Implement the new sections: Popular Jerseys, Official Tournament Jerseys, Designer Jerseys, Limited Editions, Street Style Jerseys, Local Club Jersey. Some should be wide intro sections with images linking to category pages.
--   **Product Detail Page Update**:
-    -   Display the vendor's name (Designer).
-    -   Show a section for More jerseys you might like from the same designer.
-    -   Simplify the layout to: Large photos, Name, Price, Sizes, Quantity, Buy button, followed by structured details (Designer, Category, Stock).
--   **Voting Functionality**:
-    -   Implement the frontend for Vote for the best jersey design on product pages.
-    -   Fetch the most-voted jersey and display it in the National Team card on the homepage bento grid.
--   **Menu & Sell Your Jersey Page**:
-    -   Update the main navigation menu items as requested.
-    -   Ensure the List your Jersey button in the header links to the newly created .
-    -   Add links to the new legal pages (, ) in the site footer.
+**Completed work in this session**:
+- Implemented App-style mobile bottom navigation. (DONE)
+- Implemented Full-screen overlay Search functionality. (DONE)
+- Added specific product images with Front/Back hover effects on product cards. (DONE)
+- Re-architected Admin and Vendor Dashboards with 15% platform commission logic and stats. (DONE)
+- Fixed sticky header behaviors based on scroll state. (DONE)
+- Created Jersey Customization feature (+USD 15.00 for custom name/number). (DONE)
+- Removed Made with Emergent watermark. (DONE)
+- Voting duplicate prevention (IP + Device fingerprinting). (DONE)
 
-**Future Tasks (P1):**
--   **Product Comparison**:
-    -   Implement the  functionality, allowing users to select two jerseys to view side-by-side.
-    -   Add a Buy Now button under each item in the comparison view.
--   **360 Jersey View**:
-    -   Integrate a placeholder or a library for a 360-degree product view on the product detail page.
--   **SEO Image Rename**:
-    -   Rename the hero banner image file to Ghana-Jersey.jpg for SEO purposes, as requested in the meta description task.
+**Earlier issues found/mentioned but not fixed**:
+- Admin Dashboard needs an interface to review the newly implemented Vendor Onboarding submissions. The backend endpoints exist, but the UI is missing.
 
-**Completed work in this session**
-- **Initial MVP**: Built the core full-stack eCommerce application with Admin, Vendor, and Customer roles, and a product approval workflow.
-- **Bug Fix**: Resolved an  in the backend product creation endpoint ().
-- **Data Seeding**: Added sample products to the database and tested the vendor/admin approval flow.
-- **UI/UX Iteration 1**: Updated the landing page hero banner, header layout, and typography.
-- **UI/UX Iteration 2**: Refined the header menu color for better contrast, added a border, updated category card styles, added a Local Team category, and changed the primary yellow color to .
-- **UI/UX Iteration 3**: Implemented a Ghana flag-themed border in the header (red, yellow, green lines), reverted the category section to a more dynamic bento grid layout, and adjusted header text color based on the page/scroll position (white on hero, black on light backgrounds).
+**Known issue recurrence from previous fork**:
+- Recurrence count: 0
+- Status: NA
 
-**Earlier issues found/mentioned but not fixed**
-None. All previously identified issues were addressed.
-
-**Known issue recurrence from previous fork**
-None.
-
-**Code Architecture**
+**Code Architecture**:
 
 
-**Key Technical Concepts**
-- **Backend**: FastAPI
-- **Frontend**: React
-- **Database**: MongoDB
-- **Styling**: TailwindCSS with Shadcn/UI components
-- **Authentication**: JWT (custom) and Google OAuth (via Emergent Auth)
-- **Payments**: Stripe, PayPal, Paystack (playbooks retrieved)
+**Key Technical Concepts**:
+- Frontend: React, Tailwind CSS, Shadcn UI, Framer Motion, Lucide React.
+- Backend: FastAPI, Motor (Async MongoDB).
+- State/Storage: Context API for Cart, LocalStorage for JWT/Fingerprinting.
 
-**key DB schema**
--   **users**: 
--   **products**: 
+**key DB schema**:
+- : 
+- : 
+- : 
+- : 
 
-**changes in tech stack**
--   Frontend dependencies added: , , , , , .
--   Backend dependencies added: .
+**changes in tech stack**:
+- None.
 
-**All files of reference**
--   : Contains all backend logic. Modified to add voting functionality.
--   : The homepage. Currently undergoing a major rewrite.
--   : Needs to be updated with new layout and features.
--   : SEO meta tags were updated.
--   : Contains the main React router, updated to include routes for new pages.
--   New files created:
-    -   
-    -   
-    -   
-    -   
--   : Project documentation.
+**All files of reference**:
+- : **(Newly Created)** Needs routing and image upload logic.
+- : Needs routing update for onboarding.
+- : Needs UI to approve vendors.
+- : Contains new onboarding models and  restriction logic.
 
-**key api endpoints**
--   : New endpoint to increment the vote count for a product.
--   : New endpoint to get the product with the highest votes.
--   : Retrieves products. Needs to be updated to support new homepage sections/filters.
--   : Creates a new product. Updated to initialize .
--   : To be created for the more from this designer section.
+**Areas that need refactoring**:
+-  is currently >2,200 lines long. It handles everything from auth to payments to complex dashboard aggregations. As the app scales, consider proposing a refactor to split this into , , and .
+-  and  are also very large and could have sub-components extracted.
 
-**Critical Info for New Agent**
-The last user request was comprehensive and requires significant changes across the application. I have started the implementation by modifying the backend for the voting feature, creating the new static pages, and beginning a rewrite of the . You must resume this work. Carefully follow the task breakdown in Upcoming and Future Tasks to ensure all requirements are met. The  is in a partially modified state and is the immediate priority.
+**key api endpoints**:
+- 
+- 
+-  (handles customization data)
+-  (tracks device fingerprint)
 
-**documents and test reports created in this job**
--   
--   
--   
+**Critical Info for New Agent**:
+- **Authentication Block:** The backend function  was recently updated to raise an HTTP 403 if a user with role  has a  that is not . You must manually set a vendor to approved in the DB or via Admin UI to view the Vendor Dashboard during testing.
+- **Image Uploads:** Step 9 of the new Vendor Onboarding requires uploading photos. You **MUST** use  to get the Object Storage implementation guide for this. Do not attempt to save images to local disk.
+- **Emails:** The user explicitly requested to skip email we shall integrate later, so do not build email logic for onboarding approvals yet, just the state changes.
 
-**Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Requested new homepage sections, a voting system, a Sell Your Jersey page, legal pages, product comparison, 360 view, SEO updates, a new menu, and a redesigned product page. **(Status: In Progress)**
-2.  **Agent**: Acknowledged the request and started implementation.
-3.  **User**: Final approval of the previous design iteration (bento grid, Ghana flag border).
-4.  **Agent**: Completed the design updates and finished the session.
-5.  **User**: Requested header text to be black only on product pages, a three-line Ghana flag border, and to revert the category section to the previous (bento grid) layout but with better interactivity.
-6.  **Agent**: Implemented the requested changes.
-7.  **User**: Requested menu text color change to white, a border, a new category card style, Local Team category, new yellow color , and a new sans-serif body font.
-8.  **Agent**: Implemented the design changes.
-9.  **User**: Approved the design updates.
-10. **Agent**: Finished the session.
+**documents and test reports created in this job**:
+- 
+- 
+
+**Last 10 User Messages and any pending HUMAN messages**:
+1. (User) Requested fixes for sticky header behavior (Home vs Products page). (Completed)
+2. (User) Uploaded specific Jersey images, asked to replace generic products and create new ones. (Completed)
+3. (User) Uploaded images for the Shop by Category section. (Completed)
+4. (User) Requested massive features for Admin & Vendor Dashboards (15% commission math, views, order states, stats, add/edit/pause products). (Completed)
+5. (Agent) Asked if this should be done in phases, and if emails should be included.
+6. (User) Replied: proceed with phase 1, skip email for now. (Completed)
+7. (User) Requested UI changes: Full screen search overlay, mobile bottom nav (app style), update footer copyright, and add Product Customization (Name/Number). (Completed)
+8. (User) Requested removal of Made with Emergent tag. (Completed)
+9. (User) **[PENDING]** Requested a comprehensive 9-step Vendor Onboarding questionnaire. Vendors cannot access dashboard until Admin approves this form.
 
 **Project Health Check:**
--   **Broken**: The frontend is in a partially-implemented state due to the ongoing rewrite of . The site will not function as expected until this rewrite is complete.
--   **Mocked**: None.
+- Broken: Vendor onboarding is partially implemented. A vendor logging in right now will hit a 403 error trying to fetch dashboard data because they aren't approved, but there is no way for them to access the onboarding form yet.
 
-**3rd Party Integrations**
--   **Stripe**: Payment processing. Keys are in the environment.
--   **PayPal**: Payment processing.
--   **Paystack**: Payment processing.
--   **Emergent-managed Google Auth**: For social login.
+**3rd Party Integrations**:
+- Emergent-managed Google Auth — uses Emergent Auth
+- Stripe (Payments) — requires User API Key
+- Object Storage (File Uploads for vendor onboarding) — MUST use 
 
-**Testing status**
--   **Testing agent used after significant changes**: YES (for the initial MVP).
--   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**:  (by testing agent).
--   **Known regressions**: None from completed work, but the current in-progress work has broken the landing page.
+**Testing status**:
+- Testing agent used after significant changes: YES (iteration_4.json)
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: , 
+- Known regressions: Vendor login flow is currently broken due to incomplete onboarding routing.
 
-**Credentials to test flow:**
--   **Admin**:  / 
--   **Vendor**:  /  (created via script during initial setup).
+**Credentials to test flow**:
+- Admin:  / 
+- Vendor:  / 
 
-**What agent forgot to execute**
-The agent has just begun the large list of tasks from the most recent user request. All items from that request are pending and are listed in the **Upcoming and Future Tasks** section. Nothing has been forgotten, but the work is in its early stages.</analysis>
+**What agent forgot to execute**:
+The agent created  but stopped before importing it into  router. The agent also did not create the UI inside the  to view and approve/reject these onboarding applications, nor did they implement Object Storage for the required photo uploads in step 9 of the onboarding form.</analysis>
