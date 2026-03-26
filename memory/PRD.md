@@ -8,6 +8,7 @@ Build a modern, scalable international eCommerce web application focused on sell
 - **Backend**: FastAPI (Python) with MongoDB
 - **Authentication**: JWT + Emergent Google OAuth
 - **Payments**: Stripe (integrated), PayPal (playbook ready), Paystack (requires API key)
+- **File Storage**: Emergent Object Storage for vendor verification images
 - **Hosting**: Emergent Platform
 
 ## User Roles & Credentials
@@ -15,12 +16,13 @@ Build a modern, scalable international eCommerce web application focused on sell
 ### Admin
 - Email: easante@nitlimited.com
 - Password: admin123
-- Capabilities: Full marketplace control, approve/reject products, manage vendors, view analytics, 15% commission tracking
+- Capabilities: Full marketplace control, approve/reject products & vendors, manage orders, view analytics, 15% commission tracking
 
 ### Vendor
-- Email: vendor@blackstar.com
-- Password: vendor123
+- Email: vendor@blackstar.com / testvendor@blackstar.com
+- Password: vendor123 / testvendor123
 - Capabilities: Upload products, manage inventory, update order status, view earnings, create promos
+- **Must complete 9-step onboarding and be approved by admin before accessing dashboard**
 
 ### Customer
 - Register via /auth page or Google OAuth
@@ -44,6 +46,11 @@ Build a modern, scalable international eCommerce web application focused on sell
   - Platform Commission (15%) calculation
   - Vendor Earnings Total
   - Confirmed Deliveries count
+- **Onboarding Tab** (NEW - December 2024):
+  - Review pending vendor applications
+  - View complete onboarding data (Identity, Business, Inventory, Production, Delivery, Quality, Commitment, Verification Images)
+  - Approve or Reject applications with one click
+  - Full application detail modal
 - **Vendors & Earnings Tab**:
   - View all vendors with earnings breakdown
   - See products per vendor ("View Products" button)
@@ -63,7 +70,24 @@ Build a modern, scalable international eCommerce web application focused on sell
 - **Customers Tab**:
   - View all registered customers
 
+#### Vendor Onboarding Flow (NEW - December 2024)
+- **9-Step Questionnaire**:
+  1. **Identity**: Full name, business name, phone, email, city, social media, years in business
+  2. **Business Legitimacy**: Online/offline sales, selling platforms, monthly jersey sales
+  3. **Inventory**: Stock type (ready/made-to-order), stock quantity, sizes available
+  4. **Production Capacity**: Weekly capacity, production time per jersey
+  5. **Delivery**: Methods (Bolt, courier, Ghana Post, pickup), delivery times by region
+  6. **Quality**: Jersey source (design/resell/both), materials used
+  7. **Commitment**: Fulfill on time, fulfill through platform
+  8. **Agreement**: Accept terms & conditions (15% commission, respond in 24h, etc.)
+  9. **Verification**: Upload jersey photos and packaging photos (via Object Storage)
+- **Vendor Status Flow**:
+  - `pending_onboarding` → (submit form) → `pending_approval` → (admin approves) → `approved`
+  - Rejected vendors can resubmit
+
 #### Vendor Dashboard Features
+- **Access Control**: Only approved vendors can access dashboard
+- **Pending/Rejected vendors see appropriate status screens**
 - **Financial Overview**:
   - Total Revenue
   - Platform Fee (15%)
@@ -118,8 +142,12 @@ Build a modern, scalable international eCommerce web application focused on sell
 - PUT /api/admin/orders/{order_id}/status - Update order status
 - GET /api/admin/products/pending - Pending approvals
 - PUT /api/admin/products/{id}/approve - Approve/reject product
+- **GET /api/admin/vendors/pending** - Get vendors awaiting approval (NEW)
+- **PUT /api/admin/vendors/{user_id}/approve?approved=true/false** - Approve/reject vendor (NEW)
 
 ### Vendor Routes
+- **GET /api/vendor/onboarding-status** - Check vendor's approval status (NEW)
+- **POST /api/vendor/onboarding** - Submit 9-step onboarding form (NEW)
 - GET /api/vendor/dashboard - Comprehensive stats
 - GET /api/vendor/orders - Orders with customer details
 - PUT /api/vendor/orders/{order_id}/status - Update order status
@@ -134,6 +162,10 @@ Build a modern, scalable international eCommerce web application focused on sell
 - GET /api/vendor/promos - List promos
 - POST /api/vendor/promos - Create promo
 - DELETE /api/vendor/promos/{id} - Delete promo
+
+### File Upload Routes (NEW)
+- **POST /api/upload/vendor-image** - Upload verification images for onboarding
+- **GET /api/files/{path}** - Retrieve uploaded files
 
 ### Delivery Confirmation
 - GET /api/orders/{order_id}/confirm/{token} - Customer confirms delivery (link-based)
@@ -150,12 +182,15 @@ Build a modern, scalable international eCommerce web application focused on sell
 
 ### P0 (Critical) - Completed
 - ✅ Admin/Vendor dashboard enhancements
+- ✅ Vendor Onboarding 9-step questionnaire
+- ✅ Admin vendor approval workflow
+- ✅ Object Storage integration for file uploads
 
 ### P1 (High Priority) - Next
-- Email integration (order confirmation, delivery confirmation)
+- Email integration (order confirmation, delivery confirmation, vendor approval notification)
 - PayPal payment integration
 - Paystack payment integration
-- Image upload via Object Storage
+- Customization details display in Cart/Checkout (Name/Number + $15 fee)
 
 ### P2 (Medium Priority)
 - Implement GHANA10 discount code at checkout
@@ -183,11 +218,15 @@ Build a modern, scalable international eCommerce web application focused on sell
 
 ## Test Reports
 - /app/test_reports/iteration_4.json - Phase 1 dashboard testing (100% pass)
+- /app/test_reports/iteration_5.json - Vendor Onboarding testing (100% pass)
 - /app/backend/tests/test_admin_vendor_dashboards.py - Backend tests
+- /app/backend/tests/test_vendor_onboarding.py - Onboarding tests
 
 ## Files of Reference
 - backend/server.py - All API endpoints
-- frontend/src/pages/AdminDashboard.jsx - Admin panel
-- frontend/src/pages/VendorDashboard.jsx - Vendor panel
+- frontend/src/App.js - Main router including /vendor/onboarding route
+- frontend/src/pages/AdminDashboard.jsx - Admin panel with Onboarding tab
+- frontend/src/pages/VendorDashboard.jsx - Vendor panel with status checking
+- frontend/src/pages/VendorOnboarding.jsx - 9-step onboarding form
 - frontend/src/pages/LandingPage.jsx - Homepage with Header/Footer
 - frontend/src/pages/ProductDetailPage.jsx - Product page with voting
