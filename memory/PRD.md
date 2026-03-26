@@ -9,6 +9,7 @@ Build a modern, scalable international eCommerce web application focused on sell
 - **Authentication**: JWT + Emergent Google OAuth
 - **Payments**: Stripe (integrated), PayPal (playbook ready), Paystack (requires API key)
 - **File Storage**: Emergent Object Storage for vendor verification images
+- **Localization**: 5 languages (EN, FR, ES, PT, NL) with dual currency (USD/GHS)
 - **Hosting**: Emergent Platform
 
 ## User Roles & Credentials
@@ -37,6 +38,32 @@ Build a modern, scalable international eCommerce web application focused on sell
 - Product detail pages with voting
 - Stripe payment integration
 - Premium Afro-Futurist design (Ghana flag colors)
+
+### Phase 2: Internationalization (December 2024)
+
+#### Multi-Language Support
+- **5 Languages with Country Flags**:
+  - 🇬🇧 English (default)
+  - 🇫🇷 Français (French)
+  - 🇪🇸 Español (Spanish)
+  - 🇵🇹 Português (Portuguese)
+  - 🇳🇱 Nederlands (Dutch)
+- Language selector in header with flag icons
+- All UI elements translated (navigation, buttons, labels, product cards)
+- Language preference persists in localStorage
+
+#### Geolocation-Based Currency
+- **Automatic Detection**: Users in Ghana see GHS, others see USD
+- **Manual Override**: Users can switch currency via dropdown
+- **Currency Options**:
+  - $ USD (US Dollar) - for international customers
+  - GH₵ GHS (Ghana Cedi) - for Ghana customers
+- Exchange rate: 1 USD = 15.38 GHS
+
+#### Vendor Dual Pricing
+- Vendors can set both USD and GHS prices for products
+- Separate fields for customization price in both currencies
+- If GHS price not set, automatic conversion from USD
 
 ### Phase 1: Enhanced Dashboards (December 2024)
 
@@ -219,14 +246,17 @@ Build a modern, scalable international eCommerce web application focused on sell
 ## Test Reports
 - /app/test_reports/iteration_4.json - Phase 1 dashboard testing (100% pass)
 - /app/test_reports/iteration_5.json - Vendor Onboarding testing (100% pass)
+- /app/test_reports/iteration_6.json - Localization testing (100% pass)
 - /app/backend/tests/test_admin_vendor_dashboards.py - Backend tests
 - /app/backend/tests/test_vendor_onboarding.py - Onboarding tests
+- /app/backend/tests/test_localization.py - Localization tests
 
 ## Files of Reference
 - backend/server.py - All API endpoints
 - frontend/src/App.js - Main router including /vendor/onboarding route
+- frontend/src/localization/ - Translations, LocalizationContext, LanguageCurrencySelector
 - frontend/src/pages/AdminDashboard.jsx - Admin panel with Onboarding tab
-- frontend/src/pages/VendorDashboard.jsx - Vendor panel with status checking
+- frontend/src/pages/VendorDashboard.jsx - Vendor panel with dual pricing
 - frontend/src/pages/VendorOnboarding.jsx - 9-step onboarding form
-- frontend/src/pages/LandingPage.jsx - Homepage with Header/Footer
-- frontend/src/pages/ProductDetailPage.jsx - Product page with voting
+- frontend/src/pages/LandingPage.jsx - Homepage with Header/Footer and language selector
+- frontend/src/pages/ProductDetailPage.jsx - Product page with localized prices
