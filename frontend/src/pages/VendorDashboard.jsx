@@ -36,6 +36,7 @@ const VendorDashboard = () => {
     name: "",
     description: "",
     price: "",
+    price_ghs: "",
     currency: "USD",
     category: "official-tournament",
     sizes: ["S", "M", "L", "XL"],
@@ -43,7 +44,8 @@ const VendorDashboard = () => {
     images: ["", ""],
     tags: [],
     allows_customization: false,
-    customization_price: ""
+    customization_price: "",
+    customization_price_ghs: ""
   });
 
   // Promo form state
@@ -141,10 +143,14 @@ const VendorDashboard = () => {
       const payload = {
         ...productForm,
         price: parseFloat(productForm.price),
+        price_ghs: productForm.price_ghs ? parseFloat(productForm.price_ghs) : null,
         stock: parseInt(productForm.stock) || 0,
         images: productForm.images.filter(img => img.trim() !== ""),
         allows_customization: productForm.allows_customization,
-        customization_price: productForm.allows_customization ? parseFloat(productForm.customization_price) || 0 : 0
+        customization_price: productForm.allows_customization ? parseFloat(productForm.customization_price) || 0 : 0,
+        customization_price_ghs: productForm.allows_customization && productForm.customization_price_ghs 
+          ? parseFloat(productForm.customization_price_ghs) 
+          : null
       };
 
       if (editingProduct) {
@@ -281,6 +287,7 @@ const VendorDashboard = () => {
       name: product.name,
       description: product.description,
       price: product.price.toString(),
+      price_ghs: (product.price_ghs || "").toString(),
       currency: product.currency,
       category: product.category,
       sizes: product.sizes,
@@ -288,7 +295,8 @@ const VendorDashboard = () => {
       images: product.images.length > 0 ? [...product.images, ""] : ["", ""],
       tags: product.tags || [],
       allows_customization: product.allows_customization || false,
-      customization_price: (product.customization_price || "").toString()
+      customization_price: (product.customization_price || "").toString(),
+      customization_price_ghs: (product.customization_price_ghs || "").toString()
     });
     setShowProductModal(true);
   };
@@ -298,6 +306,7 @@ const VendorDashboard = () => {
       name: "",
       description: "",
       price: "",
+      price_ghs: "",
       currency: "USD",
       category: "official-tournament",
       sizes: ["S", "M", "L", "XL"],
@@ -305,7 +314,8 @@ const VendorDashboard = () => {
       images: ["", ""],
       tags: [],
       allows_customization: false,
-      customization_price: ""
+      customization_price: "",
+      customization_price_ghs: ""
     });
   };
 
@@ -450,7 +460,7 @@ const VendorDashboard = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label className="font-body text-sm uppercase tracking-wider">Price *</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Price USD *</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -459,17 +469,31 @@ const VendorDashboard = () => {
                       placeholder="79.99"
                       className="mt-2"
                     />
+                    <p className="font-body text-xs text-muted-text mt-1">For international customers</p>
                   </div>
                   <div>
-                    <Label className="font-body text-sm uppercase tracking-wider">Stock Quantity *</Label>
+                    <Label className="font-body text-sm uppercase tracking-wider">Price GHS *</Label>
                     <Input
                       type="number"
-                      value={productForm.stock}
-                      onChange={(e) => setProductForm({...productForm, stock: e.target.value})}
-                      placeholder="50"
+                      step="0.01"
+                      value={productForm.price_ghs}
+                      onChange={(e) => setProductForm({...productForm, price_ghs: e.target.value})}
+                      placeholder="1230.00"
                       className="mt-2"
                     />
+                    <p className="font-body text-xs text-muted-text mt-1">For Ghana customers</p>
                   </div>
+                </div>
+
+                <div>
+                  <Label className="font-body text-sm uppercase tracking-wider">Stock Quantity *</Label>
+                  <Input
+                    type="number"
+                    value={productForm.stock}
+                    onChange={(e) => setProductForm({...productForm, stock: e.target.value})}
+                    placeholder="50"
+                    className="mt-2"
+                  />
                 </div>
 
                 <div>
@@ -559,17 +583,30 @@ const VendorDashboard = () => {
                   {productForm.allows_customization && (
                     <div className="pt-4 border-t border-black/10">
                       <Label className="font-body text-sm uppercase tracking-wider">Customization Price</Label>
-                      <p className="font-body text-xs text-muted-text mb-2">Additional charge for customization</p>
-                      <div className="flex items-center gap-2">
-                        <span className="font-body text-sm">$</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={productForm.customization_price}
-                          onChange={(e) => setProductForm({...productForm, customization_price: e.target.value})}
-                          placeholder="15.00"
-                          className="w-32"
-                        />
+                      <p className="font-body text-xs text-muted-text mb-2">Additional charge for customization (both currencies)</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-body text-sm">$</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={productForm.customization_price}
+                            onChange={(e) => setProductForm({...productForm, customization_price: e.target.value})}
+                            placeholder="15.00"
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-body text-sm">GH₵</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={productForm.customization_price_ghs}
+                            onChange={(e) => setProductForm({...productForm, customization_price_ghs: e.target.value})}
+                            placeholder="230.00"
+                            className="w-full"
+                          />
+                        </div>
                       </div>
                     </div>
                   )}

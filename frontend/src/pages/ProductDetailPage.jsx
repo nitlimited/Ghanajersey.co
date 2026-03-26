@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Header, Footer, ProductCard, MobileBottomNav } from "./LandingPage";
 import { useAuth, useCart, API } from "../App";
+import { useLocalization } from "../localization";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -29,6 +30,7 @@ const ProductDetailPage = () => {
   const [customNumber, setCustomNumber] = useState("");
   const { user, token } = useAuth();
   const { addToCart } = useCart();
+  const { formatPrice, t, currency, getPrice } = useLocalization();
 
   // Generate or retrieve device fingerprint for voting
   const getDeviceFingerprint = () => {
@@ -259,12 +261,12 @@ const ProductDetailPage = () => {
             {/* Price */}
             <div className="flex items-center gap-4">
               <span className="font-body text-3xl font-medium" data-testid="product-price">
-                {product.currency} {product.price.toFixed(2)}
+                {formatPrice(product.price, product.price_ghs)}
               </span>
               {product.stock > 0 ? (
-                <span className="font-body text-xs text-ghana-green uppercase tracking-wider">In Stock</span>
+                <span className="font-body text-xs text-ghana-green uppercase tracking-wider">{t('products.addToCart').split(' ')[0]} Stock</span>
               ) : (
-                <span className="font-body text-xs text-ghana-red uppercase tracking-wider">Out of Stock</span>
+                <span className="font-body text-xs text-ghana-red uppercase tracking-wider">{t('products.outOfStock')}</span>
               )}
             </div>
 
@@ -331,7 +333,7 @@ const ProductDetailPage = () => {
                       data-testid="customization-toggle"
                     />
                     <span className="font-body text-sm text-ashanti-gold font-semibold">
-                      +{product.currency} {(product.customization_price || 0).toFixed(2)}
+                      +{formatPrice(product.customization_price || 0, product.customization_price_ghs)}
                     </span>
                   </label>
                 </div>
@@ -339,7 +341,7 @@ const ProductDetailPage = () => {
                 {wantsCustomization && (
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-black/10">
                     <div>
-                      <Label className="font-body text-xs uppercase tracking-wider text-muted-text">Name on Back</Label>
+                      <Label className="font-body text-xs uppercase tracking-wider text-muted-text">{t('productDetail.customName')}</Label>
                       <Input
                         value={customName}
                         onChange={(e) => setCustomName(e.target.value.slice(0, 15))}
@@ -351,7 +353,7 @@ const ProductDetailPage = () => {
                       <p className="font-body text-[10px] text-muted-text mt-1">{customName.length}/15 characters</p>
                     </div>
                     <div>
-                      <Label className="font-body text-xs uppercase tracking-wider text-muted-text">Number on Back</Label>
+                      <Label className="font-body text-xs uppercase tracking-wider text-muted-text">{t('productDetail.customNumber')}</Label>
                       <Input
                         value={customNumber}
                         onChange={(e) => {
@@ -373,9 +375,12 @@ const ProductDetailPage = () => {
             {/* Total Price Display */}
             {wantsCustomization && product.allows_customization && (
               <div className="flex items-center justify-between p-4 bg-bone-white">
-                <span className="font-body text-sm">Jersey + Customization</span>
+                <span className="font-body text-sm">Jersey + {t('cart.customization')}</span>
                 <span className="font-body text-xl font-semibold">
-                  {product.currency} {((product.price + (product.customization_price || 0)) * quantity).toFixed(2)}
+                  {formatPrice(
+                    (product.price + (product.customization_price || 0)) * quantity,
+                    (getPrice(product.price, product.price_ghs) + getPrice(product.customization_price || 0, product.customization_price_ghs)) * quantity
+                  )}
                 </span>
               </div>
             )}
@@ -388,7 +393,7 @@ const ProductDetailPage = () => {
                 className="flex-1 bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                 data-testid="add-to-cart-btn"
               >
-                Add to Cart
+                {t('productDetail.addToCart')}
               </Button>
               <Button
                 onClick={handleAddToWishlist}

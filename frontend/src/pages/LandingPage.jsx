@@ -3,15 +3,18 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search, Home } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useAuth, useCart, API } from "../App";
+import { useLocalization, LanguageCurrencySelector } from "../localization";
 import axios from "axios";
 
 // Announcement Bar Component
 const AnnouncementBar = ({ isSticky = false }) => {
+  const { t, formatPrice } = useLocalization();
+  
   return (
     <div className={`bg-black text-white py-2 px-4 hidden md:block ${isSticky ? 'sticky top-0 z-50' : ''}`}>
       <div className="max-w-7xl mx-auto flex items-center justify-center">
         <p className="font-body text-xs md:text-sm tracking-wide text-center">
-          <span className="text-ashanti-gold font-semibold">FREE SHIPPING</span> on orders over $100 | Use code <span className="text-ashanti-gold font-semibold">GHANA10</span> for 10% off
+          <span className="text-ashanti-gold font-semibold">{t('announcement.freeShipping')}</span> {t('announcement.onOrdersOver')} {formatPrice(100)} | {t('announcement.useCode')} <span className="text-ashanti-gold font-semibold">GHANA10</span> {t('announcement.forDiscount')}
         </p>
       </div>
     </div>
@@ -151,6 +154,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const { user, logout } = useAuth();
   const { cart } = useCart();
+  const { t } = useLocalization();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -217,19 +221,19 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
             {/* Left - Navigation */}
             <nav className="flex items-center gap-5 pr-16">
               <Link to="/products?category=official-tournament" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-official">
-                Tournament
+                {t('nav.tournament')}
               </Link>
               <Link to="/products?category=streetwear" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-streetwear">
-                Streetwear
+                {t('nav.streetwear')}
               </Link>
               <Link to="/products?category=fan" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-fan">
-                Fan
+                {t('nav.fan')}
               </Link>
               <Link to="/products?category=retro" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-retro">
-                Retro
+                {t('nav.retro')}
               </Link>
               <Link to="/products?category=creative-designer" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
-                Designers
+                {t('nav.designers')}
               </Link>
             </nav>
 
@@ -244,6 +248,9 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
 
             {/* Right - Icons */}
             <div className={`flex items-center gap-4 pl-16 ${useDarkText ? 'text-black' : 'text-white'}`}>
+              {/* Language/Currency Selector */}
+              <LanguageCurrencySelector variant={useDarkText ? 'light' : 'dark'} />
+              
               <button onClick={() => setSearchOpen(true)} className="hover:text-ashanti-gold transition-colors" data-testid="search-btn">
                 <Search size={20} />
               </button>
@@ -256,23 +263,23 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                   </button>
                   <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-black/10 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                     <Link to="/dashboard" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-dashboard">
-                      My Orders
+                      {t('nav.myOrders')}
                     </Link>
                     <Link to="/wishlist" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-wishlist">
-                      Wishlist
+                      {t('nav.wishlist')}
                     </Link>
                     {user.role === "vendor" && (
                       <Link to="/vendor" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-vendor">
-                        Vendor Dashboard
+                        {t('nav.vendorDashboard')}
                       </Link>
                     )}
                     {user.role === "admin" && (
                       <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
-                        Admin Dashboard
+                        {t('nav.adminDashboard')}
                       </Link>
                     )}
                     <button onClick={logout} className="w-full text-left px-4 py-2 hover:bg-black/5 font-body text-sm text-ghana-red" data-testid="btn-logout">
-                      Logout
+                      {t('nav.logout')}
                     </button>
                   </div>
                 </div>
@@ -301,24 +308,28 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
           <div className="md:hidden bg-white border-t border-black/10">
             <nav className="flex flex-col py-4">
               <Link to="/products?category=official-tournament" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-                Tournament
+                {t('nav.tournament')}
               </Link>
               <Link to="/products?category=streetwear" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-                Streetwear
+                {t('nav.streetwear')}
               </Link>
               <Link to="/products?category=fan" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-                Fan
+                {t('nav.fan')}
               </Link>
               <Link to="/products?category=retro" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-                Retro
+                {t('nav.retro')}
               </Link>
               <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-                Designers
+                {t('nav.designers')}
               </Link>
               <div className="border-t border-black/10 mt-2 pt-2">
                 <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
-                  List Your Jersey
+                  {t('footer.sellWithUs')}
                 </Link>
+                {/* Mobile Language/Currency Selector */}
+                <div className="px-6 py-3">
+                  <LanguageCurrencySelector variant="light" />
+                </div>
               </div>
             </nav>
           </div>
@@ -448,6 +459,7 @@ const Marquee = () => {
 
 // Product Card Component
 const ProductCard = ({ product }) => {
+  const { formatPrice, t } = useLocalization();
   const primaryImage = product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600";
   const secondaryImage = product.images?.[1] || product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600";
   
@@ -470,12 +482,12 @@ const ProductCard = ({ product }) => {
         </div>
         {product.featured && (
           <span className="absolute top-4 left-4 bg-ashanti-gold text-black px-3 py-1 font-body text-xs font-semibold tracking-wide z-10">
-            Featured
+            {t('home.featured')}
           </span>
         )}
         {product.is_limited_edition && (
           <span className="absolute top-4 right-4 bg-ghana-red text-white px-3 py-1 font-body text-xs font-semibold tracking-wide z-10">
-            Limited
+            {t('products.limitedEdition')}
           </span>
         )}
         <div className="p-4 bg-white">
@@ -487,7 +499,7 @@ const ProductCard = ({ product }) => {
           </h3>
           <div className="flex items-center justify-between mt-2">
             <span className="font-body text-lg font-semibold">
-              {product.currency} {product.price.toFixed(2)}
+              {formatPrice(product.price, product.price_ghs)}
             </span>
             {product.rating > 0 && (
               <div className="flex items-center gap-1">

@@ -22,6 +22,7 @@ import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import ComparePage from "./pages/ComparePage";
 import VendorOnboarding from "./pages/VendorOnboarding";
+import { LocalizationProvider } from "./localization";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -327,12 +328,14 @@ function AppRouter() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <CartProvider>
-          <Toaster position="top-right" richColors />
-          <AppRouter />
-        </CartProvider>
-      </AuthProvider>
+      <LocalizationProvider>
+        <AuthProvider>
+          <CartProvider>
+            <Toaster position="top-right" richColors />
+            <AppRouter />
+          </CartProvider>
+        </AuthProvider>
+      </LocalizationProvider>
     </BrowserRouter>
   );
 }

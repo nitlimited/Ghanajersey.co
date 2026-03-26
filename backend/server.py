@@ -159,7 +159,8 @@ class VendorProfileUpdate(BaseModel):
 class ProductCreate(BaseModel):
     name: str
     description: str
-    price: float
+    price: float  # USD price
+    price_ghs: Optional[float] = None  # GHS price (optional, for Ghanaian customers)
     currency: str = "USD"
     category: str  # official-tournament, streetwear, fan, retro, creative-designer, local-club
     jersey_type: str = "fan"  # original, fan
@@ -171,11 +172,13 @@ class ProductCreate(BaseModel):
     # Customization options
     allows_customization: bool = False
     customization_price: Optional[float] = 0.0
+    customization_price_ghs: Optional[float] = None  # GHS customization price
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     price: Optional[float] = None
+    price_ghs: Optional[float] = None
     currency: Optional[str] = None
     category: Optional[str] = None
     jersey_type: Optional[str] = None
@@ -187,6 +190,7 @@ class ProductUpdate(BaseModel):
     # Customization options
     allows_customization: Optional[bool] = None
     customization_price: Optional[float] = None
+    customization_price_ghs: Optional[float] = None
 
 class ProductResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
