@@ -54,16 +54,20 @@ Build a modern, scalable international eCommerce web application focused on sell
 
 #### Geolocation-Based Currency
 - **Automatic Detection**: Users in Ghana see GHS, others see USD
-- **Manual Override**: Users can switch currency via dropdown
-- **Currency Options**:
-  - $ USD (US Dollar) - for international customers
-  - GH₵ GHS (Ghana Cedi) - for Ghana customers
-- Exchange rate: 1 USD = 15.38 GHS
+- **NO Manual Override**: Currency is determined ONLY by location
+- **Vendor-Set Prices**: Vendors set independent prices for each market (no conversion)
+- **Currency Display**:
+  - 🇬🇭 Ghana users: GH₵ (Ghana Cedi) - vendor's GHS price
+  - 🌍 International users: $ (US Dollar) - vendor's USD price
+- **Free Shipping Threshold**: 
+  - Ghana: GH₵500
+  - International: $100
 
 #### Vendor Dual Pricing
-- Vendors can set both USD and GHS prices for products
+- Vendors MUST set both USD and GHS prices for products
 - Separate fields for customization price in both currencies
-- If GHS price not set, automatic conversion from USD
+- Prices are independent - no automatic conversion
+- Ghana customers see GHS price, international see USD price
 
 ### Phase 1: Enhanced Dashboards (December 2024)
 

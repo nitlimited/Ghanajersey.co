@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { translations, languages, currencies, USD_TO_GHS_RATE } from './translations';
+import { translations, languages, currencies } from './translations';
 
 // Create contexts
 const LocalizationContext = createContext(null);
@@ -28,10 +28,10 @@ const detectCountry = async () => {
       return data.country_code;
     }
   } catch (error) {
-    console.log('Geolocation detection failed, using default');
+    console.log('Geolocation detection failed, defaulting to international');
   }
   
-  // Default to non-Ghana
+  // Default to non-Ghana (international)
   return null;
 };
 
@@ -47,38 +47,30 @@ export const LocalizationProvider = ({ children }) => {
     return localStorage.getItem('bst_language') || detectBrowserLanguage();
   });
   
-  const [currency, setCurrency] = useState(() => {
-    return localStorage.getItem('bst_currency') || 'USD';
-  });
-  
+  // Currency is determined ONLY by geolocation - no user switching
   const [isGhana, setIsGhana] = useState(false);
   const [countryDetected, setCountryDetected] = useState(false);
 
-  // Detect country on mount
+  // Detect country on mount - this determines currency automatically
   useEffect(() => {
     const detect = async () => {
-      // Check if user manually set currency
-      const manualCurrency = localStorage.getItem('bst_currency_manual');
-      if (manualCurrency) {
-        setCountryDetected(true);
-        return;
-      }
-      
       const country = await detectCountry();
       const userInGhana = country === 'GH';
       setIsGhana(userInGhana);
-      
-      // Auto-set currency based on location (only if not manually set)
-      if (!localStorage.getItem('bst_currency')) {
-        const newCurrency = userInGhana ? 'GHS' : 'USD';
-        setCurrency(newCurrency);
-        localStorage.setItem('bst_currency', newCurrency);
-      }
-      
       setCountryDetected(true);
+      
+      // Store for consistency across page reloads
+      localStorage.setItem('bst_is_ghana', userInGhana ? 'true' : 'false');
     };
     
-    detect();
+    // Check if we already detected
+    const storedIsGhana = localStorage.getItem('bst_is_ghana');
+    if (storedIsGhana !== null) {
+      setIsGhana(storedIsGhana === 'true');
+      setCountryDetected(true);
+    } else {
+      detect();
+    }
   }, []);
 
   // Save language preference
@@ -86,15 +78,6 @@ export const LocalizationProvider = ({ children }) => {
     if (languages.find(l => l.code === newLang)) {
       setLanguage(newLang);
       localStorage.setItem('bst_language', newLang);
-    }
-  }, []);
-
-  // Save currency preference (manual override)
-  const changeCurrency = useCallback((newCurrency) => {
-    if (currencies[newCurrency]) {
-      setCurrency(newCurrency);
-      localStorage.setItem('bst_currency', newCurrency);
-      localStorage.setItem('bst_currency_manual', 'true'); // Mark as manually set
     }
   }, []);
 
@@ -121,55 +104,63 @@ export const LocalizationProvider = ({ children }) => {
     return value || key;
   }, [language]);
 
-  // Format price based on currency preference and product prices
+  // Format price based on location - shows vendor-set price (NO conversion)
+  // For Ghana users: show GHS price if available, otherwise show USD with note
+  // For international users: show USD price
   const formatPrice = useCallback((priceUSD, priceGHS = null) => {
-    const currencyInfo = currencies[currency];
-    
-    if (currency === 'GHS') {
-      // Use GHS price if available, otherwise convert from USD
-      const price = priceGHS || (priceUSD * USD_TO_GHS_RATE);
-      return `${currencyInfo.symbol}${price.toFixed(2)}`;
+    if (isGhana) {
+      // Ghana user - show GHS price if vendor set it
+      if (priceGHS !== null && priceGHS !== undefined && priceGHS > 0) {
+        return `GH₵${priceGHS.toFixed(2)}`;
+      }
+      // Fallback: if vendor didn't set GHS price, show USD
+      return `$${priceUSD.toFixed(2)}`;
     } else {
-      // Use USD price
-      return `${currencyInfo.symbol}${priceUSD.toFixed(2)}`;
+      // International user - show USD price
+      return `$${priceUSD.toFixed(2)}`;
     }
-  }, [currency]);
+  }, [isGhana]);
 
-  // Get the appropriate price value
+  // Get the raw price value based on location
   const getPrice = useCallback((priceUSD, priceGHS = null) => {
-    if (currency === 'GHS') {
-      return priceGHS || (priceUSD * USD_TO_GHS_RATE);
+    if (isGhana && priceGHS !== null && priceGHS !== undefined && priceGHS > 0) {
+      return priceGHS;
     }
     return priceUSD;
-  }, [currency]);
+  }, [isGhana]);
 
-  // Get currency symbol
+  // Get currency symbol based on location
   const getCurrencySymbol = useCallback(() => {
-    return currencies[currency].symbol;
-  }, [currency]);
+    return isGhana ? 'GH₵' : '$';
+  }, [isGhana]);
+
+  // Get currency code based on location
+  const getCurrencyCode = useCallback(() => {
+    return isGhana ? 'GHS' : 'USD';
+  }, [isGhana]);
 
   const value = {
     // State
     language,
-    currency,
     isGhana,
     countryDetected,
+    currency: isGhana ? 'GHS' : 'USD',
     
     // Actions
     changeLanguage,
-    changeCurrency,
     
     // Helpers
     t,
     formatPrice,
     getPrice,
     getCurrencySymbol,
+    getCurrencyCode,
     
     // Data
     languages,
     currencies,
     currentLanguage: languages.find(l => l.code === language),
-    currentCurrency: currencies[currency]
+    currentCurrency: isGhana ? currencies.GHS : currencies.USD
   };
 
   return (

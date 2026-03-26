@@ -3,18 +3,21 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search, Home } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useAuth, useCart, API } from "../App";
-import { useLocalization, LanguageCurrencySelector } from "../localization";
+import { useLocalization, LanguageSelector } from "../localization";
 import axios from "axios";
 
 // Announcement Bar Component
 const AnnouncementBar = ({ isSticky = false }) => {
-  const { t, formatPrice } = useLocalization();
+  const { t, isGhana } = useLocalization();
+  
+  // Show different free shipping thresholds based on location
+  const freeShippingAmount = isGhana ? 'GH₵500' : '$100';
   
   return (
     <div className={`bg-black text-white py-2 px-4 hidden md:block ${isSticky ? 'sticky top-0 z-50' : ''}`}>
       <div className="max-w-7xl mx-auto flex items-center justify-center">
         <p className="font-body text-xs md:text-sm tracking-wide text-center">
-          <span className="text-ashanti-gold font-semibold">{t('announcement.freeShipping')}</span> {t('announcement.onOrdersOver')} {formatPrice(100)} | {t('announcement.useCode')} <span className="text-ashanti-gold font-semibold">GHANA10</span> {t('announcement.forDiscount')}
+          <span className="text-ashanti-gold font-semibold">{t('announcement.freeShipping')}</span> {t('announcement.onOrdersOver')} {freeShippingAmount} | {t('announcement.useCode')} <span className="text-ashanti-gold font-semibold">GHANA10</span> {t('announcement.forDiscount')}
         </p>
       </div>
     </div>
@@ -248,8 +251,8 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
 
             {/* Right - Icons */}
             <div className={`flex items-center gap-4 pl-16 ${useDarkText ? 'text-black' : 'text-white'}`}>
-              {/* Language/Currency Selector */}
-              <LanguageCurrencySelector variant={useDarkText ? 'light' : 'dark'} />
+              {/* Language Selector */}
+              <LanguageSelector variant={useDarkText ? 'light' : 'dark'} />
               
               <button onClick={() => setSearchOpen(true)} className="hover:text-ashanti-gold transition-colors" data-testid="search-btn">
                 <Search size={20} />
@@ -326,9 +329,9 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                 <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
                   {t('footer.sellWithUs')}
                 </Link>
-                {/* Mobile Language/Currency Selector */}
+                {/* Mobile Language Selector */}
                 <div className="px-6 py-3">
-                  <LanguageCurrencySelector variant="light" />
+                  <LanguageSelector variant="light" />
                 </div>
               </div>
             </nav>

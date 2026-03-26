@@ -134,8 +134,8 @@ const VendorDashboard = () => {
   const handleSubmitProduct = async (e) => {
     e.preventDefault();
     
-    if (!productForm.name || !productForm.price || !productForm.description) {
-      toast.error("Please fill in all required fields");
+    if (!productForm.name || !productForm.price || !productForm.price_ghs || !productForm.description) {
+      toast.error("Please fill in all required fields including both USD and GHS prices");
       return;
     }
 
@@ -143,7 +143,7 @@ const VendorDashboard = () => {
       const payload = {
         ...productForm,
         price: parseFloat(productForm.price),
-        price_ghs: productForm.price_ghs ? parseFloat(productForm.price_ghs) : null,
+        price_ghs: parseFloat(productForm.price_ghs),
         stock: parseInt(productForm.stock) || 0,
         images: productForm.images.filter(img => img.trim() !== ""),
         allows_customization: productForm.allows_customization,
@@ -468,6 +468,7 @@ const VendorDashboard = () => {
                       onChange={(e) => setProductForm({...productForm, price: e.target.value})}
                       placeholder="79.99"
                       className="mt-2"
+                      required
                     />
                     <p className="font-body text-xs text-muted-text mt-1">For international customers</p>
                   </div>
@@ -478,12 +479,16 @@ const VendorDashboard = () => {
                       step="0.01"
                       value={productForm.price_ghs}
                       onChange={(e) => setProductForm({...productForm, price_ghs: e.target.value})}
-                      placeholder="1230.00"
+                      placeholder="1200.00"
                       className="mt-2"
+                      required
                     />
                     <p className="font-body text-xs text-muted-text mt-1">For Ghana customers</p>
                   </div>
                 </div>
+                <p className="font-body text-xs text-ashanti-gold bg-ashanti-gold/10 p-2 -mt-2">
+                  Set both prices - customers see the price based on their location
+                </p>
 
                 <div>
                   <Label className="font-body text-sm uppercase tracking-wider">Stock Quantity *</Label>
