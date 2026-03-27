@@ -4,11 +4,24 @@ import { Minus, Plus, X, ShoppingBag } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Header, Footer } from "./LandingPage";
 import { useAuth, useCart } from "../App";
+import { useLocalization } from "../localization";
 
 const CartPage = () => {
   const { user } = useAuth();
   const { cart, updateCartItem, removeFromCart, loading } = useCart();
+  const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
   const navigate = useNavigate();
+
+  // Get the correct price based on location
+  const getItemPrice = (item) => {
+    if (isGhana && item.price_ghs) {
+      return item.price_ghs;
+    }
+    return item.price;
+  };
+
+  // Calculate totals based on location
+  const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
 
   const handleQuantityChange = async (productId, size, newQuantity) => {
     await updateCartItem(productId, newQuantity, size);
@@ -94,7 +107,7 @@ const CartPage = () => {
                         </button>
                       </div>
                       <span className="font-body text-lg font-medium">
-                        {item.currency} {(item.price * item.quantity).toFixed(2)}
+                        {formatPrice(item.price * item.quantity, item.price_ghs ? item.price_ghs * item.quantity : null)}
                       </span>
                     </div>
                   </div>
@@ -110,7 +123,7 @@ const CartPage = () => {
                 <div className="space-y-4 mb-6">
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
-                    <span>USD {cart.total.toFixed(2)}</span>
+                    <span>{formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}</span>
                   </div>
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping</span>
@@ -121,8 +134,15 @@ const CartPage = () => {
                 <div className="border-t border-black/10 pt-4 mb-6">
                   <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
-                    <span className="text-xl font-medium" data-testid="cart-total">USD {cart.total.toFixed(2)}</span>
+                    <span className="text-xl font-medium" data-testid="cart-total">
+                      {formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}
+                    </span>
                   </div>
+                  {isGhana && (
+                    <p className="font-body text-xs text-muted-text mt-2">
+                      Prices shown in Ghana Cedi (GHS)
+                    </p>
+                  )}
                 </div>
 
                 <Button

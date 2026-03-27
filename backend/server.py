@@ -1829,9 +1829,13 @@ async def get_recently_viewed(user: dict = Depends(get_current_user)):
 async def create_order(order_data: OrderCreate, user: dict = Depends(get_current_user)):
     order_id = f"order_{uuid.uuid4().hex[:12]}"
     
+    # Use currency to determine which price to use
+    use_ghs = order_data.currency == "GHS"
+    
     # Validate items and calculate totals
     items = []
     subtotal = 0
+    subtotal_usd = 0
     
     for item in order_data.items:
         product = await db.products.find_one(
@@ -1842,21 +1846,34 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
         
-        item_total = product["price"] * item.quantity
+        # Use GHS price if customer is from Ghana, otherwise USD
+        item_price = product.get("price_ghs", product["price"]) if use_ghs else product["price"]
+        item_price_usd = product["price"]
+        
+        item_total = item_price * item.quantity
         subtotal += item_total
+        subtotal_usd += item_price_usd * item.quantity
         
         items.append({
             "product_id": product["product_id"],
             "vendor_id": product["vendor_id"],
             "name": product["name"],
-            "price": product["price"],
+            "price": item_price,
+            "price_usd": item_price_usd,
+            "price_ghs": product.get("price_ghs"),
             "quantity": item.quantity,
             "size": item.size,
             "image": product["images"][0] if product["images"] else ""
         })
     
-    # Calculate shipping (simple flat rate for demo)
-    shipping_cost = 15.0 if order_data.shipping_address.country != "Ghana" else 5.0
+    # Calculate shipping based on currency
+    if use_ghs:
+        # GHS shipping rates
+        shipping_cost = 250.0 if order_data.shipping_address.country != "Ghana" else 50.0
+    else:
+        # USD shipping rates
+        shipping_cost = 15.0 if order_data.shipping_address.country != "Ghana" else 5.0
+    
     total = subtotal + shipping_cost
     
     order_doc = {
@@ -1866,6 +1883,7 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
         "items": items,
         "shipping_address": order_data.shipping_address.model_dump(),
         "subtotal": round(subtotal, 2),
+        "subtotal_usd": round(subtotal_usd, 2),
         "shipping_cost": shipping_cost,
         "total": round(total, 2),
         "currency": order_data.currency,

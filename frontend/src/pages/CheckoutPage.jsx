@@ -41,7 +41,12 @@ const CheckoutPage = () => {
   };
 
   const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
-  const shippingCost = shippingAddress.country === "Ghana" ? (isGhana ? 50 : 5.0) : (isGhana ? 250 : 15.0);
+  
+  // Shipping costs in respective currencies
+  const shippingCost = isGhana 
+    ? (shippingAddress.country === "Ghana" ? 50 : 250)  // GHS rates
+    : (shippingAddress.country === "Ghana" ? 5 : 15);   // USD rates
+  
   const total = subtotal + shippingCost;
   const currency = getCurrencyCode();
 
