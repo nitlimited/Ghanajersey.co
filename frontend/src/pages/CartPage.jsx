@@ -22,6 +22,7 @@ const CartPage = () => {
 
   // Calculate totals based on location
   const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
+  const formatLocalizedAmount = (amount) => formatPrice(amount, isGhana ? amount : null);
 
   const handleQuantityChange = async (productId, size, newQuantity) => {
     await updateCartItem(productId, newQuantity, size);
@@ -123,7 +124,7 @@ const CartPage = () => {
                 <div className="space-y-4 mb-6">
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
-                    <span>{formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}</span>
+                    <span>{formatLocalizedAmount(subtotal)}</span>
                   </div>
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping</span>
@@ -135,7 +136,7 @@ const CartPage = () => {
                   <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
                     <span className="text-xl font-medium" data-testid="cart-total">
-                      {formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}
+                      {formatLocalizedAmount(subtotal)}
                     </span>
                   </div>
                   {isGhana && (

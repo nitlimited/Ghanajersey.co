@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { CreditCard, Truck, Shield } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -49,6 +49,7 @@ const CheckoutPage = () => {
   
   const total = subtotal + shippingCost;
   const currency = getCurrencyCode();
+  const formatLocalizedAmount = (amount) => formatPrice(amount, isGhana ? amount : null);
 
   const countries = [
     "Ghana", "United States", "United Kingdom", "Germany", "France", 
@@ -363,18 +364,18 @@ const CheckoutPage = () => {
                 <div className="border-t border-black/10 pt-4 space-y-3">
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
-                    <span>{formatPrice(subtotal, isGhana ? subtotal : null)}</span>
+                    <span>{formatLocalizedAmount(subtotal)}</span>
                   </div>
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping {shippingAddress.country === "Ghana" ? "(Local)" : "(International)"}</span>
-                    <span>{formatPrice(isGhana ? shippingCost / 15.38 : shippingCost, isGhana ? shippingCost : null)}</span>
+                    <span>{formatLocalizedAmount(shippingCost)}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-black/10 pt-4 mt-4 mb-6">
                   <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
-                    <span className="text-xl font-medium" data-testid="checkout-total">{formatPrice(isGhana ? total / 15.38 : total, isGhana ? total : null)}</span>
+                    <span className="text-xl font-medium" data-testid="checkout-total">{formatLocalizedAmount(total)}</span>
                   </div>
                 </div>
 
@@ -384,7 +385,7 @@ const CheckoutPage = () => {
                   className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                   data-testid="place-order-btn"
                 >
-                  {loading ? "Processing..." : `Pay ${formatPrice(isGhana ? total / 15.38 : total, isGhana ? total : null)}`}
+                  {loading ? "Processing..." : `Pay ${formatLocalizedAmount(total)}`}
                 </Button>
 
                 <div className="flex items-center justify-center gap-2 mt-4 text-muted-text">

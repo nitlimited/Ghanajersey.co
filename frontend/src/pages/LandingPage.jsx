@@ -329,6 +329,40 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                 <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
                   {t('footer.sellWithUs')}
                 </Link>
+                {user ? (
+                  <>
+                    <Link to="/dashboard" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-dashboard">
+                      {t('nav.myOrders')}
+                    </Link>
+                    <Link to="/wishlist" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-wishlist">
+                      {t('nav.wishlist')}
+                    </Link>
+                    {user.role === "vendor" && (
+                      <Link to="/vendor" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-vendor">
+                        {t('nav.vendorDashboard')}
+                      </Link>
+                    )}
+                    {user.role === "admin" && (
+                      <Link to="/admin" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-admin">
+                        {t('nav.adminDashboard')}
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => {
+                        logout();
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full text-left px-6 py-3 font-body text-sm font-semibold tracking-wide text-ghana-red block"
+                      data-testid="mobile-btn-logout"
+                    >
+                      {t('nav.logout')}
+                    </button>
+                  </>
+                ) : (
+                  <Link to="/auth" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-auth">
+                    Sign In
+                  </Link>
+                )}
                 {/* Mobile Language Selector */}
                 <div className="px-6 py-3">
                   <LanguageSelector variant="light" />

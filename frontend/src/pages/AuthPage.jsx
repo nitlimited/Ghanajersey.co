@@ -6,7 +6,8 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { useAuth } from "../App";
+import axios from "axios";
+import { useAuth, API } from "../App";
 import { toast } from "sonner";
 
 const AuthPage = () => {
@@ -29,6 +30,32 @@ const AuthPage = () => {
 
   const from = location.state?.from?.pathname || "/";
 
+  const resolvePostAuthDestination = async (user) => {
+    if (user.role === "admin") {
+      return "/admin";
+    }
+
+    if (user.role !== "vendor") {
+      return from;
+    }
+
+    const authToken = localStorage.getItem("auth_token");
+    if (!authToken) {
+      return "/vendor";
+    }
+
+    try {
+      const response = await axios.get(`${API}/vendor/onboarding-status`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      const status = response.data.vendor_status;
+
+      return status === "approved" ? "/vendor" : "/vendor/onboarding";
+    } catch (error) {
+      return "/vendor";
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     if (!loginEmail || !loginPassword) {
@@ -40,15 +67,7 @@ const AuthPage = () => {
     try {
       const user = await login(loginEmail, loginPassword);
       toast.success(`Welcome back, ${user.name}!`);
-      
-      // Redirect based on role
-      if (user.role === "admin") {
-        navigate("/admin");
-      } else if (user.role === "vendor") {
-        navigate("/vendor");
-      } else {
-        navigate(from);
-      }
+      navigate(await resolvePostAuthDestination(user));
     } catch (error) {
       toast.error(error.response?.data?.detail || "Login failed");
     } finally {
@@ -72,12 +91,7 @@ const AuthPage = () => {
     try {
       const user = await register(registerEmail, registerPassword, registerName, registerRole);
       toast.success(`Welcome, ${user.name}!`);
-      
-      if (user.role === "vendor") {
-        navigate("/vendor");
-      } else {
-        navigate(from);
-      }
+      navigate(await resolvePostAuthDestination(user));
     } catch (error) {
       toast.error(error.response?.data?.detail || "Registration failed");
     } finally {
