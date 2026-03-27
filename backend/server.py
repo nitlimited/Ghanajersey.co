@@ -242,6 +242,16 @@ class CartItemResponse(BaseModel):
 class WishlistItem(BaseModel):
     product_id: str
 
+# User Activity Models
+class UserActivityCreate(BaseModel):
+    action: str  # view, click, browse, add_to_cart, purchase
+    product_id: Optional[str] = None
+    category: Optional[str] = None
+
+class ActivitySync(BaseModel):
+    recently_viewed: List[dict] = []
+    category_preferences: Dict[str, float] = {}
+
 # Order Models
 class OrderItem(BaseModel):
     product_id: str
@@ -1624,6 +1634,169 @@ async def remove_from_wishlist(product_id: str, user: dict = Depends(get_current
     
     return {"message": "Removed from wishlist"}
 
+# ==================== USER ACTIVITY & PERSONALIZATION ROUTES ====================
+
+@api_router.post("/user/activity")
+async def track_activity(activity: UserActivityCreate, user: dict = Depends(get_current_user)):
+    """Track user activity for personalization"""
+    activity_doc = {
+        "user_id": user["user_id"],
+        "action": activity.action,
+        "product_id": activity.product_id,
+        "category": activity.category,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.user_activity.insert_one(activity_doc)
+    
+    # Update user's category preferences
+    if activity.category:
+        weight = 1.0 if activity.action == "view" else 0.5 if activity.action == "click" else 0.3
+        await db.users.update_one(
+            {"user_id": user["user_id"]},
+            {"$inc": {f"category_preferences.{activity.category}": weight}},
+        )
+    
+    # Update recently viewed
+    if activity.action == "view" and activity.product_id:
+        product = await db.products.find_one(
+            {"product_id": activity.product_id},
+            {"_id": 0, "product_id": 1, "name": 1, "category": 1, "images": 1, "price": 1, "price_ghs": 1}
+        )
+        if product:
+            product["viewed_at"] = datetime.now(timezone.utc).isoformat()
+            
+            # Remove old entry if exists, add to front
+            await db.users.update_one(
+                {"user_id": user["user_id"]},
+                {"$pull": {"recently_viewed": {"product_id": activity.product_id}}}
+            )
+            await db.users.update_one(
+                {"user_id": user["user_id"]},
+                {
+                    "$push": {
+                        "recently_viewed": {
+                            "$each": [product],
+                            "$position": 0,
+                            "$slice": 20  # Keep only last 20
+                        }
+                    }
+                }
+            )
+    
+    return {"message": "Activity tracked"}
+
+@api_router.post("/user/activity/sync")
+async def sync_activity(sync_data: ActivitySync, user: dict = Depends(get_current_user)):
+    """Sync local activity data with server on login"""
+    
+    # Merge category preferences
+    if sync_data.category_preferences:
+        for category, score in sync_data.category_preferences.items():
+            await db.users.update_one(
+                {"user_id": user["user_id"]},
+                {"$inc": {f"category_preferences.{category}": score * 0.5}}  # Lower weight for old data
+            )
+    
+    # Merge recently viewed (avoid duplicates)
+    if sync_data.recently_viewed:
+        existing = await db.users.find_one(
+            {"user_id": user["user_id"]},
+            {"recently_viewed": 1}
+        )
+        existing_ids = {p["product_id"] for p in (existing.get("recently_viewed") or [])} if existing else set()
+        
+        new_items = [item for item in sync_data.recently_viewed if item.get("product_id") not in existing_ids]
+        
+        if new_items:
+            await db.users.update_one(
+                {"user_id": user["user_id"]},
+                {
+                    "$push": {
+                        "recently_viewed": {
+                            "$each": new_items[:10],  # Add up to 10 new items
+                            "$slice": 20
+                        }
+                    }
+                }
+            )
+    
+    return {"message": "Activity synced"}
+
+@api_router.get("/user/recommendations")
+async def get_recommendations(user: dict = Depends(get_current_user)):
+    """Get personalized product recommendations based on user activity"""
+    
+    user_data = await db.users.find_one(
+        {"user_id": user["user_id"]},
+        {"category_preferences": 1, "recently_viewed": 1}
+    )
+    
+    recommendations = []
+    recently_viewed_ids = []
+    
+    # Get recently viewed products
+    recently_viewed = user_data.get("recently_viewed", []) if user_data else []
+    recently_viewed_ids = [p.get("product_id") for p in recently_viewed if p.get("product_id")]
+    
+    # Get top categories from user preferences
+    category_prefs = user_data.get("category_preferences", {}) if user_data else {}
+    top_categories = sorted(category_prefs.items(), key=lambda x: x[1], reverse=True)[:3]
+    
+    # Get products from preferred categories (excluding already viewed)
+    for category, _ in top_categories:
+        products = await db.products.find(
+            {
+                "status": "approved",
+                "category": category,
+                "product_id": {"$nin": recently_viewed_ids}
+            },
+            {"_id": 0}
+        ).sort("votes", -1).limit(4).to_list(4)
+        
+        recommendations.extend(products)
+    
+    # If not enough recommendations, add popular products
+    if len(recommendations) < 8:
+        exclude_ids = recently_viewed_ids + [p["product_id"] for p in recommendations]
+        popular = await db.products.find(
+            {
+                "status": "approved",
+                "product_id": {"$nin": exclude_ids}
+            },
+            {"_id": 0}
+        ).sort("votes", -1).limit(8 - len(recommendations)).to_list(8 - len(recommendations))
+        
+        recommendations.extend(popular)
+    
+    return {
+        "recently_viewed": recently_viewed[:8],
+        "for_you": recommendations[:8],
+        "top_categories": [cat for cat, _ in top_categories]
+    }
+
+@api_router.get("/user/recently-viewed")
+async def get_recently_viewed(user: dict = Depends(get_current_user)):
+    """Get user's recently viewed products"""
+    user_data = await db.users.find_one(
+        {"user_id": user["user_id"]},
+        {"recently_viewed": 1}
+    )
+    
+    recently_viewed = user_data.get("recently_viewed", []) if user_data else []
+    
+    # Fetch full product data for recently viewed
+    products = []
+    for item in recently_viewed[:12]:
+        product = await db.products.find_one(
+            {"product_id": item.get("product_id"), "status": "approved"},
+            {"_id": 0}
+        )
+        if product:
+            products.append(product)
+    
+    return products
+
 # ==================== ORDER ROUTES ====================
 
 @api_router.post("/orders")
@@ -2480,6 +2653,10 @@ async def startup_event():
     await db.orders.create_index("customer_id")
     
     logger.info("Database indexes created")
+
+    await db.user_activity.create_index("user_id")
+    await db.user_activity.create_index([("user_id", 1), ("action", 1)])
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

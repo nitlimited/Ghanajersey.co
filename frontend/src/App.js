@@ -23,6 +23,8 @@ import PrivacyPage from "./pages/PrivacyPage";
 import ComparePage from "./pages/ComparePage";
 import VendorOnboarding from "./pages/VendorOnboarding";
 import { LocalizationProvider } from "./localization";
+import { UserActivityProvider } from "./context/UserActivityContext";
+import CookieConsent from "./components/CookieConsent";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -331,8 +333,11 @@ function App() {
       <LocalizationProvider>
         <AuthProvider>
           <CartProvider>
-            <Toaster position="top-right" richColors />
-            <AppRouter />
+            <UserActivityProvider>
+              <Toaster position="top-right" richColors />
+              <AppRouter />
+              <CookieConsent />
+            </UserActivityProvider>
           </CartProvider>
         </AuthProvider>
       </LocalizationProvider>

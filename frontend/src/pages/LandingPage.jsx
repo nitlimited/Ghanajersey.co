@@ -524,7 +524,9 @@ const LandingPage = () => {
   const [topVotedProduct, setTopVotedProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [forYouProducts, setForYouProducts] = useState([]);
+  const { user, token } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -548,6 +550,35 @@ const LandingPage = () => {
 
     fetchData();
   }, []);
+
+  // Fetch personalized content for logged-in users
+  useEffect(() => {
+    const fetchPersonalized = async () => {
+      if (!user || !token) {
+        // Load from localStorage for guests
+        const stored = localStorage.getItem('bst_recently_viewed');
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            setRecentlyViewed(parsed.slice(0, 8));
+          } catch (e) {}
+        }
+        return;
+      }
+
+      try {
+        const response = await axios.get(`${API}/user/recommendations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setRecentlyViewed(response.data.recently_viewed || []);
+        setForYouProducts(response.data.for_you || []);
+      } catch (error) {
+        console.error("Failed to fetch personalized content:", error);
+      }
+    };
+
+    fetchPersonalized();
+  }, [user, token]);
 
   const categoryImages = {
     "official-tournament": "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600",
@@ -603,6 +634,55 @@ const LandingPage = () => {
 
       {/* Marquee */}
       <Marquee />
+
+      {/* Personalized: Recently Viewed (if any) */}
+      {recentlyViewed.length > 0 && (
+        <section className="py-16 px-6 md:px-12 bg-white border-b border-black/5">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-8 bg-ashanti-gold"></div>
+                <h2 className="font-heading text-xl md:text-2xl tracking-wide">Pick Up Where You Left Off</h2>
+              </div>
+              <Link to="/products" className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
+                View All <ChevronRight size={16} />
+              </Link>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4 md:gap-6">
+              {recentlyViewed.slice(0, 4).map((product) => (
+                <ProductCard key={product.product_id} product={product} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Personalized: For You (logged-in users with browsing history) */}
+      {user && forYouProducts.length > 0 && (
+        <section className="py-16 px-6 md:px-12 bg-bone-white">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-8 bg-ghana-green"></div>
+                <div>
+                  <h2 className="font-heading text-xl md:text-2xl tracking-wide">Recommended For You</h2>
+                  <p className="font-body text-sm text-muted-text mt-1">Based on your browsing history</p>
+                </div>
+              </div>
+              <Link to="/products" className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
+                Explore More <ChevronRight size={16} />
+              </Link>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              {forYouProducts.slice(0, 4).map((product) => (
+                <ProductCard key={product.product_id} product={product} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Vote for Best Jersey - Banner Section */}
       <section className="py-16 px-6 md:px-12 bg-ashanti-gold">

@@ -42,6 +42,57 @@ const ProductDetailPage = () => {
     return fingerprint;
   };
 
+  // Track product view for personalization
+  const trackProductView = (productData) => {
+    // Check if personalization is allowed
+    const consent = localStorage.getItem('bst_cookie_consent');
+    let allowed = true;
+    if (consent) {
+      try {
+        const prefs = JSON.parse(consent);
+        allowed = prefs.personalization !== false;
+      } catch {}
+    }
+    if (!allowed) return;
+
+    // Save to localStorage for guest users
+    const viewedItem = {
+      product_id: productData.product_id,
+      name: productData.name,
+      category: productData.category,
+      image: productData.images?.[0],
+      price: productData.price,
+      price_ghs: productData.price_ghs,
+      viewed_at: new Date().toISOString()
+    };
+
+    const stored = localStorage.getItem('bst_recently_viewed');
+    let recentlyViewed = stored ? JSON.parse(stored) : [];
+    recentlyViewed = recentlyViewed.filter(p => p.product_id !== productData.product_id);
+    recentlyViewed.unshift(viewedItem);
+    recentlyViewed = recentlyViewed.slice(0, 20);
+    localStorage.setItem('bst_recently_viewed', JSON.stringify(recentlyViewed));
+
+    // Update category preferences
+    if (productData.category) {
+      const prefs = localStorage.getItem('bst_category_prefs');
+      let categoryPrefs = prefs ? JSON.parse(prefs) : {};
+      categoryPrefs[productData.category] = (categoryPrefs[productData.category] || 0) + 1;
+      localStorage.setItem('bst_category_prefs', JSON.stringify(categoryPrefs));
+    }
+
+    // Send to server if logged in
+    if (user && token) {
+      axios.post(`${API}/user/activity`, {
+        action: 'view',
+        product_id: productData.product_id,
+        category: productData.category
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(e => console.log('Activity tracking failed:', e));
+    }
+  };
+
   useEffect(() => {
     const fetchProduct = async () => {
       setLoading(true);
@@ -52,6 +103,9 @@ const ProductDetailPage = () => {
         if (response.data.sizes?.length > 0) {
           setSelectedSize(response.data.sizes[0]);
         }
+
+        // Track this product view
+        trackProductView(response.data);
 
         // Check if user has already voted (using device fingerprint)
         const fingerprint = getDeviceFingerprint();

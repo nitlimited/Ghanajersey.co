@@ -69,6 +69,33 @@ Build a modern, scalable international eCommerce web application focused on sell
 - Prices are independent - no automatic conversion
 - Ghana customers see GHS price, international see USD price
 
+### Phase 3: Personalization & Privacy (December 2024)
+
+#### Cookie Consent System
+- **Cookie Banner**: Displays on first visit with exact legal text
+- **Manage Cookies Modal**: Users can toggle:
+  - Essential Cookies (required, cannot disable)
+  - Analytics Cookies
+  - Marketing Cookies
+  - Personalization Cookies
+- Links to Privacy Policy and Terms & Conditions
+- Preferences stored in localStorage
+
+#### Personalized Homepage
+- **"Pick Up Where You Left Off"** section shows recently viewed products
+- **"Recommended For You"** section (logged-in users) shows products based on:
+  - Browsing history
+  - Category preferences
+  - Product views and clicks
+- Homepage adapts to each user's interests
+- Guest activity syncs to account on login
+
+#### User Activity Tracking
+- Tracks: product views, clicks, category browsing
+- Category preferences weighted by interaction type
+- Data stored locally for guests, server-side for logged users
+- Respects cookie preferences (can disable personalization)
+
 ### Phase 1: Enhanced Dashboards (December 2024)
 
 #### Admin Dashboard Features
