@@ -2148,7 +2148,7 @@ async def initialize_paystack(checkout: PaystackInitialize, user: dict = Depends
         raise HTTPException(status_code=500, detail="Paystack not configured")
     
     # Convert amount to smallest unit (kobo for NGN, pesewas for GHS)
-    amount_smallest = int(order["total"] * 100)
+    amount_smallest = int(round(float(order["total"]) * 100))
     reference = f"bst_{uuid.uuid4().hex[:16]}"
     
     # Use callback_url from request or default
