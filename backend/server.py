@@ -2710,9 +2710,75 @@ async def subscribe_newsletter(data: NewsletterSubscribe):
 async def root():
     return {"message": "Black Star Threads API", "version": "1.0.0"}
 
+
+async def _run_health_checks(include_optional: bool = False) -> tuple[dict, bool]:
+    checks = {}
+    healthy = True
+
+    try:
+        await db.command("ping")
+        checks["database"] = "ok"
+    except Exception as e:
+        healthy = False
+        checks["database"] = f"error: {e}"
+
+    index_file = FRONTEND_BUILD_DIR / "index.html"
+    if index_file.exists():
+        checks["frontend_build"] = "ok"
+    else:
+        healthy = False
+        checks["frontend_build"] = "missing"
+
+    if include_optional:
+        checks["stripe"] = "configured" if STRIPE_API_KEY else "missing"
+
+        if S3_BUCKET:
+            try:
+                checks["storage"] = "configured" if init_storage() else "unavailable"
+                if checks["storage"] != "configured":
+                    healthy = False
+            except Exception as e:
+                healthy = False
+                checks["storage"] = f"error: {e}"
+        else:
+            checks["storage"] = "not_configured"
+
+    return checks, healthy
+
+
 @api_router.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    checks, healthy = await _run_health_checks()
+    payload = {"status": "healthy" if healthy else "unhealthy", "checks": checks}
+    if healthy:
+        return payload
+    return JSONResponse(status_code=503, content=payload)
+
+
+@api_router.get("/health/live")
+async def health_live():
+    return {"status": "alive"}
+
+
+@api_router.get("/health/ready")
+async def health_ready():
+    checks, healthy = await _run_health_checks()
+    payload = {"status": "ready" if healthy else "not_ready", "checks": checks}
+    if healthy:
+        return payload
+    return JSONResponse(status_code=503, content=payload)
+
+
+@api_router.get("/health/deep")
+async def health_deep():
+    checks, healthy = await _run_health_checks(include_optional=True)
+    payload = {
+        "status": "healthy" if healthy else "degraded",
+        "checks": checks,
+    }
+    if healthy:
+        return payload
+    return JSONResponse(status_code=503, content=payload)
 
 # Include the router in the main app
 app.include_router(api_router)

@@ -52,7 +52,7 @@ Suggested settings:
 - Resource type: `Dockerfile`
 - Dockerfile path: `Dockerfile`
 - Port: `8000`
-- Health check path: `/api/health`
+- Health check path: `/api/health/ready`
 
 ### Required Environment Variables
 
@@ -146,12 +146,17 @@ FastAPI serves:
 ## Deployment Checklist
 
 Before going live, verify:
-- the app responds at `/api/health`
+- the app responds at `/api/health/ready`
 - `CORS_ORIGINS` exactly matches your public domain
 - MongoDB is reachable from the container
 - `JWT_SECRET_KEY` is set to a strong value
 - payment keys are set if Stripe or Paystack should work in production
 - object storage credentials are set if vendor onboarding uploads should work
+
+Health endpoints:
+- `/api/health/live` for liveness
+- `/api/health/ready` for readiness
+- `/api/health/deep` for readiness plus optional Stripe and storage checks
 
 ## Troubleshooting
 
@@ -166,7 +171,7 @@ Check:
 
 Check:
 - the container is exposing port `8000`
-- the health check path is `/api/health`
+- the health check path is `/api/health/ready`
 - the start command from the Dockerfile is running successfully
 
 ### Refreshing a frontend route gives 404
