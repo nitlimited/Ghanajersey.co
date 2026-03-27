@@ -27,8 +27,10 @@ import { LocalizationProvider } from "./localization";
 import { UserActivityProvider } from "./context/UserActivityContext";
 import CookieConsent from "./components/CookieConsent";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+const API = BACKEND_URL.endsWith("/api")
+  ? BACKEND_URL
+  : `${BACKEND_URL}/api`;
 
 // Auth Context
 const AuthContext = createContext(null);

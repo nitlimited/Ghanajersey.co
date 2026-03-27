@@ -1,10 +1,13 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Cookie, UploadFile, File
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from botocore.exceptions import BotoCoreError, ClientError
 import os
 import logging
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -16,8 +19,11 @@ import httpx
 import hmac
 import hashlib
 import requests
+import boto3
+import stripe
 
 ROOT_DIR = Path(__file__).parent
+FRONTEND_BUILD_DIR = ROOT_DIR.parent / "frontend" / "build"
 load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
@@ -32,12 +38,15 @@ JWT_EXPIRATION_HOURS = int(os.environ.get('JWT_EXPIRATION_HOURS', 168))
 
 # Stripe Config
 STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY', 'sk_test_emergent')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+stripe.api_key = STRIPE_API_KEY
 
 # Object Storage Config
-STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 APP_NAME = "blackstar-threads"
-storage_key = None
+S3_BUCKET = os.environ.get('S3_BUCKET')
+S3_REGION = os.environ.get('S3_REGION')
+S3_ENDPOINT_URL = os.environ.get('S3_ENDPOINT_URL')
+s3_client = None
 
 # Paystack Config
 PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY')
@@ -60,57 +69,88 @@ logger = logging.getLogger(__name__)
 # ==================== OBJECT STORAGE FUNCTIONS ====================
 
 def init_storage():
-    """Initialize storage - call once at startup, returns reusable storage_key"""
-    global storage_key
-    if storage_key:
-        return storage_key
-    
-    if not EMERGENT_LLM_KEY:
-        logger.error("EMERGENT_LLM_KEY not set, storage unavailable")
+    """Initialize S3-compatible storage client once and reuse it."""
+    global s3_client
+    if s3_client:
+        return s3_client
+
+    if not S3_BUCKET:
+        logger.warning("S3_BUCKET not set, file storage unavailable")
         return None
-    
+
     try:
-        resp = requests.post(
-            f"{STORAGE_URL}/init",
-            json={"emergent_key": EMERGENT_LLM_KEY},
-            timeout=30
-        )
-        resp.raise_for_status()
-        storage_key = resp.json()["storage_key"]
-        logger.info("Object storage initialized successfully")
-        return storage_key
+        client_kwargs = {}
+        if S3_REGION:
+            client_kwargs["region_name"] = S3_REGION
+        if S3_ENDPOINT_URL:
+            client_kwargs["endpoint_url"] = S3_ENDPOINT_URL
+        if os.environ.get("AWS_ACCESS_KEY_ID"):
+            client_kwargs["aws_access_key_id"] = os.environ.get("AWS_ACCESS_KEY_ID")
+        if os.environ.get("AWS_SECRET_ACCESS_KEY"):
+            client_kwargs["aws_secret_access_key"] = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        if os.environ.get("AWS_SESSION_TOKEN"):
+            client_kwargs["aws_session_token"] = os.environ.get("AWS_SESSION_TOKEN")
+
+        s3_client = boto3.client("s3", **client_kwargs)
+        logger.info("S3-compatible storage initialized successfully")
+        return s3_client
     except Exception as e:
         logger.error(f"Failed to initialize storage: {e}")
         return None
 
 def put_object(path: str, data: bytes, content_type: str) -> dict:
-    """Upload file to object storage"""
-    key = init_storage()
-    if not key:
+    """Upload file to S3-compatible object storage."""
+    client = init_storage()
+    if not client or not S3_BUCKET:
         raise HTTPException(status_code=500, detail="Storage not initialized")
-    
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data,
-        timeout=120
-    )
-    resp.raise_for_status()
-    return resp.json()
+
+    try:
+        client.put_object(
+            Bucket=S3_BUCKET,
+            Key=path,
+            Body=data,
+            ContentType=content_type,
+        )
+        return {"path": path, "size": len(data)}
+    except (BotoCoreError, ClientError) as e:
+        logger.error(f"Failed to upload object: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload file") from e
 
 def get_object(path: str) -> tuple:
-    """Download file from object storage"""
-    key = init_storage()
-    if not key:
+    """Download file from S3-compatible object storage."""
+    client = init_storage()
+    if not client or not S3_BUCKET:
         raise HTTPException(status_code=500, detail="Storage not initialized")
-    
-    resp = requests.get(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key},
-        timeout=60
+
+    try:
+        resp = client.get_object(Bucket=S3_BUCKET, Key=path)
+        return resp["Body"].read(), resp.get("ContentType", "application/octet-stream")
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code")
+        if error_code in {"NoSuchKey", "404"}:
+            raise HTTPException(status_code=404, detail="File not found") from e
+        logger.error(f"Failed to retrieve object: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve file") from e
+
+
+async def _mark_transaction_paid(session_id: str):
+    transaction = await db.payment_transactions.find_one(
+        {"session_id": session_id},
+        {"_id": 0}
     )
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+    if transaction and transaction["payment_status"] != "paid":
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {"payment_status": "paid"}}
+        )
+
+        await db.orders.update_one(
+            {"order_id": transaction["order_id"]},
+            {"$set": {"payment_status": "paid", "order_status": "processing"}}
+        )
+
+    return transaction
 
 MIME_TYPES = {
     "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
@@ -1933,8 +1973,6 @@ async def get_order(order_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.post("/payments/stripe/checkout")
 async def create_stripe_checkout(checkout: CheckoutRequest, request: Request, user: dict = Depends(get_current_user)):
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
-    
     order = await db.orders.find_one(
         {"order_id": checkout.order_id, "customer_id": user["user_id"]},
         {"_id": 0}
@@ -1943,31 +1981,39 @@ async def create_stripe_checkout(checkout: CheckoutRequest, request: Request, us
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
-    
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-    
     success_url = f"{checkout.origin_url}/order-success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{checkout.origin_url}/checkout?order_id={checkout.order_id}"
-    
-    checkout_request = CheckoutSessionRequest(
-        amount=float(order["total"]),
-        currency=order["currency"].lower(),
-        success_url=success_url,
-        cancel_url=cancel_url,
-        metadata={
-            "order_id": checkout.order_id,
-            "user_id": user["user_id"]
-        }
-    )
-    
-    session = await stripe_checkout.create_checkout_session(checkout_request)
+
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            client_reference_id=checkout.order_id,
+            payment_method_types=["card"],
+            metadata={
+                "order_id": checkout.order_id,
+                "user_id": user["user_id"],
+            },
+            line_items=[{
+                "price_data": {
+                    "currency": order["currency"].lower(),
+                    "product_data": {
+                        "name": f"Order {checkout.order_id}",
+                    },
+                    "unit_amount": int(round(float(order["total"]) * 100)),
+                },
+                "quantity": 1,
+            }],
+        )
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe checkout creation failed: {e}")
+        raise HTTPException(status_code=502, detail="Failed to create Stripe checkout session") from e
     
     # Create payment transaction record
     transaction_doc = {
         "transaction_id": f"txn_{uuid.uuid4().hex[:12]}",
-        "session_id": session.session_id,
+        "session_id": session.id,
         "order_id": checkout.order_id,
         "user_id": user["user_id"],
         "amount": float(order["total"]),
@@ -1979,72 +2025,49 @@ async def create_stripe_checkout(checkout: CheckoutRequest, request: Request, us
     
     await db.payment_transactions.insert_one(transaction_doc)
     
-    return {"url": session.url, "session_id": session.session_id}
+    return {"url": session.url, "session_id": session.id}
 
 @api_router.get("/payments/stripe/status/{session_id}")
 async def get_stripe_payment_status(session_id: str, user: dict = Depends(get_current_user)):
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
-    
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
-    
-    status = await stripe_checkout.get_checkout_status(session_id)
-    
-    # Update payment transaction and order
-    if status.payment_status == "paid":
-        transaction = await db.payment_transactions.find_one(
-            {"session_id": session_id},
-            {"_id": 0}
-        )
-        
-        if transaction and transaction["payment_status"] != "paid":
-            await db.payment_transactions.update_one(
-                {"session_id": session_id},
-                {"$set": {"payment_status": "paid"}}
-            )
-            
-            await db.orders.update_one(
-                {"order_id": transaction["order_id"]},
-                {"$set": {"payment_status": "paid", "order_status": "processing"}}
-            )
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe status lookup failed: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch Stripe payment status") from e
+
+    if session.get("payment_status") == "paid":
+        await _mark_transaction_paid(session_id)
     
     return {
-        "status": status.status,
-        "payment_status": status.payment_status,
-        "amount_total": status.amount_total,
-        "currency": status.currency
+        "status": session.get("status"),
+        "payment_status": session.get("payment_status"),
+        "amount_total": session.get("amount_total"),
+        "currency": session.get("currency")
     }
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
-    
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
-    
-    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
-    
+
     try:
-        webhook_response = await stripe_checkout.handle_webhook(body, signature)
-        
-        if webhook_response.payment_status == "paid":
-            session_id = webhook_response.session_id
-            
-            transaction = await db.payment_transactions.find_one(
-                {"session_id": session_id},
-                {"_id": 0}
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(
+                payload=body,
+                sig_header=signature,
+                secret=STRIPE_WEBHOOK_SECRET,
             )
-            
-            if transaction and transaction["payment_status"] != "paid":
-                await db.payment_transactions.update_one(
-                    {"session_id": session_id},
-                    {"$set": {"payment_status": "paid"}}
-                )
-                
-                await db.orders.update_one(
-                    {"order_id": transaction["order_id"]},
-                    {"$set": {"payment_status": "paid", "order_status": "processing"}}
-                )
-        
+        else:
+            event = json.loads(body.decode("utf-8"))
+
+        event_type = event.get("type")
+        event_object = event.get("data", {}).get("object", {})
+
+        if event_type == "checkout.session.completed" and event_object.get("payment_status") == "paid":
+            session_id = event_object.get("id")
+            if session_id:
+                await _mark_transaction_paid(session_id)
+
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Stripe webhook error: {e}")
@@ -2701,6 +2724,41 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if (FRONTEND_BUILD_DIR / "static").exists():
+    app.mount("/static", StaticFiles(directory=FRONTEND_BUILD_DIR / "static"), name="frontend-static")
+
+
+def _frontend_asset_response(requested_path: str = ""):
+    if not FRONTEND_BUILD_DIR.exists():
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+
+    build_root = FRONTEND_BUILD_DIR.resolve()
+    candidate = (build_root / requested_path).resolve()
+
+    try:
+        candidate.relative_to(build_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Not found") from exc
+
+    if requested_path and candidate.is_file():
+        return FileResponse(candidate)
+
+    index_file = build_root / "index.html"
+    if not index_file.exists():
+        raise HTTPException(status_code=404, detail="Frontend entrypoint not found")
+
+    return FileResponse(index_file)
+
+
+@app.get("/", include_in_schema=False)
+async def serve_frontend_root():
+    return _frontend_asset_response()
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend(full_path: str):
+    return _frontend_asset_response(full_path)
 
 @app.on_event("startup")
 async def startup_event():
