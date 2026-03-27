@@ -67,6 +67,7 @@ Suggested settings:
 | `STRIPE_WEBHOOK_SECRET` | Recommended | Needed to verify Stripe webhook signatures |
 | `PAYSTACK_SECRET_KEY` | Optional | Needed for Paystack payments |
 | `PAYSTACK_PUBLIC_KEY` | Optional | Needed for Paystack frontend flow |
+| `RESEND_API_KEY` | Optional | Needed when Resend is used for transactional emails |
 | `S3_BUCKET` | Recommended | Bucket name for vendor onboarding uploads |
 | `S3_REGION` | Optional | S3 or compatible storage region |
 | `S3_ENDPOINT_URL` | Optional | Custom endpoint for MinIO, R2, Spaces, or other S3-compatible storage |
@@ -94,6 +95,7 @@ If your live domain is `https://ghanajersey.co`, use:
 CORS_ORIGINS=https://ghanajersey.co
 FRONTEND_URL=https://ghanajersey.co
 JWT_SECRET_KEY=replace-with-a-long-random-secret
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
 S3_BUCKET=ghanajersey-uploads
 ```
 
@@ -114,6 +116,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 export MONGO_URL="your-mongodb-url"
 export DB_NAME="ghanajersey"
+export RESEND_API_KEY="re_xxxxxxxxxxxxxxxxx"
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -151,6 +154,7 @@ Before going live, verify:
 - MongoDB is reachable from the container
 - `JWT_SECRET_KEY` is set to a strong value
 - payment keys are set if Stripe or Paystack should work in production
+- `RESEND_API_KEY` is set if transactional emails should work in production
 - object storage credentials are set if vendor onboarding uploads should work
 
 Health endpoints:
