@@ -39,6 +39,11 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 APP_NAME = "blackstar-threads"
 storage_key = None
 
+# Paystack Config
+PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY')
+PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY')
+PAYSTACK_BASE_URL = "https://api.paystack.co"
+
 # Create the main app
 app = FastAPI(title="Black Star Threads API", version="1.0.0")
 
@@ -291,6 +296,18 @@ class OrderResponse(BaseModel):
     order_status: str  # pending, processing, shipped, delivered, cancelled
     tracking_number: Optional[str] = None
     created_at: datetime
+
+# Paystack Payment Models
+class PaystackInitialize(BaseModel):
+    order_id: str
+    email: str
+    callback_url: str
+
+class PaystackVerifyResponse(BaseModel):
+    status: str
+    message: str
+    order_id: Optional[str] = None
+    amount: Optional[float] = None
 
 # Review Models
 class ReviewCreate(BaseModel):
@@ -1450,11 +1467,12 @@ async def get_cart(user: dict = Depends(get_current_user)):
     cart = await db.carts.find_one({"user_id": user["user_id"]}, {"_id": 0})
     
     if not cart:
-        return {"items": [], "total": 0}
+        return {"items": [], "total": 0, "total_ghs": 0}
     
     # Populate product details
     items = []
     total = 0
+    total_ghs = 0
     
     for item in cart.get("items", []):
         product = await db.products.find_one(
@@ -1463,18 +1481,26 @@ async def get_cart(user: dict = Depends(get_current_user)):
         )
         if product:
             item_price = product["price"]
+            item_price_ghs = product.get("price_ghs") or 0
+            
             # Add customization price if present
             customization = item.get("customization")
             if customization and (customization.get("name") or customization.get("number")):
-                item_price += customization.get("price", 0)
+                item_price += product.get("customization_price", 0)
+                item_price_ghs += product.get("customization_price_ghs", 0) or 0
             
             item_total = item_price * item["quantity"]
+            item_total_ghs = item_price_ghs * item["quantity"]
             total += item_total
+            total_ghs += item_total_ghs
+            
             items.append({
                 "product_id": product["product_id"],
                 "name": product["name"],
                 "price": item_price,
+                "price_ghs": item_price_ghs,
                 "base_price": product["price"],
+                "base_price_ghs": product.get("price_ghs"),
                 "currency": product["currency"],
                 "quantity": item["quantity"],
                 "size": item["size"],
@@ -1482,7 +1508,7 @@ async def get_cart(user: dict = Depends(get_current_user)):
                 "customization": customization
             })
     
-    return {"items": items, "total": round(total, 2)}
+    return {"items": items, "total": round(total, 2), "total_ghs": round(total_ghs, 2)}
 
 @api_router.post("/cart/add")
 async def add_to_cart(item: CartItem, user: dict = Depends(get_current_user)):
@@ -2066,7 +2092,7 @@ async def capture_paypal_order(paypal_order_id: str, user: dict = Depends(get_cu
 
 # Paystack routes
 @api_router.post("/payments/paystack/initialize")
-async def initialize_paystack(checkout: CheckoutRequest, user: dict = Depends(get_current_user)):
+async def initialize_paystack(checkout: PaystackInitialize, user: dict = Depends(get_current_user)):
     order = await db.orders.find_one(
         {"order_id": checkout.order_id, "customer_id": user["user_id"]},
         {"_id": 0}
@@ -2080,10 +2106,17 @@ async def initialize_paystack(checkout: CheckoutRequest, user: dict = Depends(ge
     if not paystack_secret:
         raise HTTPException(status_code=500, detail="Paystack not configured")
     
-    # Convert amount to smallest unit
-    amount_kobo = int(order["total"] * 100)
-    reference = f"ref_{uuid.uuid4().hex[:16]}"
-    callback_url = f"{checkout.origin_url}/payment/callback?reference={reference}"
+    # Convert amount to smallest unit (kobo for NGN, pesewas for GHS)
+    amount_smallest = int(order["total"] * 100)
+    reference = f"bst_{uuid.uuid4().hex[:16]}"
+    
+    # Use callback_url from request or default
+    callback_url = checkout.callback_url or f"{os.environ.get('FRONTEND_URL', 'https://curated-threads-3.preview.emergentagent.com')}/payment/paystack/callback"
+    
+    # Determine currency - Paystack supports GHS and NGN primarily
+    currency = order.get("currency", "GHS")
+    if currency not in ["GHS", "NGN", "USD"]:
+        currency = "GHS"  # Default to GHS for Ghana
     
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -2093,13 +2126,21 @@ async def initialize_paystack(checkout: CheckoutRequest, user: dict = Depends(ge
                 "Content-Type": "application/json"
             },
             json={
-                "email": user["email"],
-                "amount": amount_kobo,
+                "email": checkout.email or user["email"],
+                "amount": amount_smallest,
+                "currency": currency,
                 "reference": reference,
                 "callback_url": callback_url,
                 "metadata": {
                     "order_id": checkout.order_id,
-                    "user_id": user["user_id"]
+                    "user_id": user["user_id"],
+                    "custom_fields": [
+                        {
+                            "display_name": "Order ID",
+                            "variable_name": "order_id",
+                            "value": checkout.order_id
+                        }
+                    ]
                 }
             }
         )
@@ -2110,10 +2151,11 @@ async def initialize_paystack(checkout: CheckoutRequest, user: dict = Depends(ge
         transaction_doc = {
             "transaction_id": f"txn_{uuid.uuid4().hex[:12]}",
             "session_id": reference,
+            "paystack_reference": result["data"]["reference"],
             "order_id": checkout.order_id,
             "user_id": user["user_id"],
             "amount": float(order["total"]),
-            "currency": order["currency"],
+            "currency": currency,
             "payment_method": "paystack",
             "payment_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat()
@@ -2123,7 +2165,8 @@ async def initialize_paystack(checkout: CheckoutRequest, user: dict = Depends(ge
         
         return {
             "authorization_url": result["data"]["authorization_url"],
-            "reference": result["data"]["reference"]
+            "reference": result["data"]["reference"],
+            "access_code": result["data"]["access_code"]
         }
     
     raise HTTPException(status_code=400, detail=result.get("message", "Failed to initialize payment"))
@@ -2144,25 +2187,50 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
         result = response.json()
     
     if result.get("status") and result["data"]["status"] == "success":
+        # Find transaction by reference or paystack_reference
         transaction = await db.payment_transactions.find_one(
-            {"session_id": reference},
+            {"$or": [
+                {"session_id": reference},
+                {"paystack_reference": reference}
+            ]},
             {"_id": 0}
         )
         
         if transaction and transaction["payment_status"] != "paid":
+            # Update payment transaction
             await db.payment_transactions.update_one(
-                {"session_id": reference},
-                {"$set": {"payment_status": "paid"}}
+                {"$or": [
+                    {"session_id": reference},
+                    {"paystack_reference": reference}
+                ]},
+                {"$set": {
+                    "payment_status": "paid",
+                    "paystack_transaction_id": result["data"].get("id"),
+                    "paid_at": datetime.now(timezone.utc).isoformat()
+                }}
             )
             
+            # Update order
             await db.orders.update_one(
                 {"order_id": transaction["order_id"]},
-                {"$set": {"payment_status": "paid", "order_status": "processing"}}
+                {"$set": {
+                    "payment_status": "paid",
+                    "order_status": "processing",
+                    "paid_at": datetime.now(timezone.utc).isoformat()
+                }}
             )
         
-        return {"status": "success", "data": result["data"]}
+        return {
+            "status": "success",
+            "message": "Payment verified successfully",
+            "data": result["data"],
+            "order_id": transaction["order_id"] if transaction else None
+        }
     
-    return {"status": "failed"}
+    return {
+        "status": "failed",
+        "message": result.get("message", "Payment verification failed")
+    }
 
 @api_router.post("/webhook/paystack")
 async def paystack_webhook(request: Request):

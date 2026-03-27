@@ -225,6 +225,13 @@ Build a modern, scalable international eCommerce web application focused on sell
 - **POST /api/upload/vendor-image** - Upload verification images for onboarding
 - **GET /api/files/{path}** - Retrieve uploaded files
 
+### Payment Routes
+- **POST /api/payments/stripe/checkout** - Create Stripe checkout session (USD)
+- **POST /api/payments/paypal/create** - Create PayPal order
+- **POST /api/payments/paypal/capture/{order_id}** - Capture PayPal payment
+- **POST /api/payments/paystack/initialize** - Initialize Paystack transaction (GHS/NGN)
+- **GET /api/payments/paystack/verify/{reference}** - Verify Paystack payment
+
 ### Delivery Confirmation
 - GET /api/orders/{order_id}/confirm/{token} - Customer confirms delivery (link-based)
 
@@ -243,11 +250,15 @@ Build a modern, scalable international eCommerce web application focused on sell
 - ✅ Vendor Onboarding 9-step questionnaire
 - ✅ Admin vendor approval workflow
 - ✅ Object Storage integration for file uploads
+- ✅ Multi-language support (5 languages)
+- ✅ Geolocation-based currency (GHS for Ghana, USD international)
+- ✅ Cookie consent system
+- ✅ Personalized homepage (recently viewed, recommendations)
+- ✅ **Paystack payment integration** (Mobile Money, Bank Card, USSD)
 
 ### P1 (High Priority) - Next
 - Email integration (order confirmation, delivery confirmation, vendor approval notification)
-- PayPal payment integration
-- Paystack payment integration
+- PayPal payment integration (playbook ready)
 - Customization details display in Cart/Checkout (Name/Number + $15 fee)
 
 ### P2 (Medium Priority)

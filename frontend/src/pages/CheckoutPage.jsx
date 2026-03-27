@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Label } from "../components/ui/label";
 import { Header, Footer } from "./LandingPage";
 import { useAuth, useCart, API } from "../App";
+import { useLocalization } from "../localization";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -16,9 +17,9 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
   const { user, token } = useAuth();
   const { cart, clearCart } = useCart();
+  const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
   const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("stripe");
-  const [currency, setCurrency] = useState("USD");
+  const [paymentMethod, setPaymentMethod] = useState(isGhana ? "paystack" : "stripe");
 
   const [shippingAddress, setShippingAddress] = useState({
     full_name: user?.name || "",
@@ -27,19 +28,22 @@ const CheckoutPage = () => {
     city: "",
     state: "",
     postal_code: "",
-    country: "Ghana",
+    country: isGhana ? "Ghana" : "United States",
     phone: ""
   });
 
-  const shippingCost = shippingAddress.country !== "Ghana" ? 15.0 : 5.0;
-  const total = cart.total + shippingCost;
+  // Calculate totals based on location
+  const getItemPrice = (item) => {
+    if (isGhana && item.price_ghs) {
+      return item.price_ghs;
+    }
+    return item.price;
+  };
 
-  const currencies = [
-    { code: "USD", symbol: "$", name: "US Dollar" },
-    { code: "GBP", symbol: "£", name: "British Pound" },
-    { code: "EUR", symbol: "€", name: "Euro" },
-    { code: "GHS", symbol: "₵", name: "Ghanaian Cedi" }
-  ];
+  const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
+  const shippingCost = shippingAddress.country === "Ghana" ? (isGhana ? 50 : 5.0) : (isGhana ? 250 : 15.0);
+  const total = subtotal + shippingCost;
+  const currency = getCurrencyCode();
 
   const countries = [
     "Ghana", "United States", "United Kingdom", "Germany", "France", 
@@ -74,20 +78,25 @@ const CheckoutPage = () => {
     setLoading(true);
 
     try {
-      // Create order
+      // Create order with correct currency based on location
       const orderItems = cart.items.map(item => ({
         product_id: item.product_id,
         quantity: item.quantity,
         size: item.size,
-        price: item.price,
-        currency: item.currency
+        price: isGhana && item.price_ghs ? item.price_ghs : item.price,
+        price_usd: item.price,
+        price_ghs: item.price_ghs,
+        currency: currency
       }));
 
       const orderResponse = await axios.post(`${API}/orders`, {
         items: orderItems,
         shipping_address: shippingAddress,
         payment_method: paymentMethod,
-        currency
+        currency: currency,
+        subtotal: subtotal,
+        shipping_cost: shippingCost,
+        total: total
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -125,15 +134,21 @@ const CheckoutPage = () => {
           navigate(`/order-success?order_id=${order_id}`);
         }
       } else if (paymentMethod === "paystack") {
+        // Paystack for Ghana customers (GHS) or other African countries
         const paymentResponse = await axios.post(`${API}/payments/paystack/initialize`, {
           order_id,
-          origin_url: originUrl
+          email: user?.email,
+          callback_url: `${originUrl}/payment/paystack/callback`
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
-        // Redirect to Paystack
-        window.location.href = paymentResponse.data.authorization_url;
+        if (paymentResponse.data.authorization_url) {
+          // Redirect to Paystack payment page
+          window.location.href = paymentResponse.data.authorization_url;
+        } else {
+          throw new Error("Failed to initialize Paystack payment");
+        }
       }
     } catch (error) {
       console.error("Checkout error:", error);
@@ -263,44 +278,58 @@ const CheckoutPage = () => {
                 </div>
 
                 <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-4">
-                  <div className="flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors">
+                  {/* Paystack - Highlighted for Ghana users */}
+                  <div className={`flex items-center space-x-3 p-4 border cursor-pointer transition-colors ${
+                    isGhana ? 'border-ghana-green bg-ghana-green/5' : 'border-black/10 hover:border-black'
+                  } ${paymentMethod === 'paystack' ? 'border-black bg-black/5' : ''}`}>
+                    <RadioGroupItem value="paystack" id="paystack" data-testid="payment-paystack" />
+                    <Label htmlFor="paystack" className="flex-1 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <span className="font-body font-medium">Paystack</span>
+                        {isGhana && <span className="bg-ghana-green text-white text-[10px] px-2 py-0.5 font-body uppercase">Recommended</span>}
+                      </div>
+                      <span className="font-body text-sm text-muted-text block">Mobile Money, Bank Card, USSD {isGhana ? '(GHS)' : '(Africa)'}</span>
+                    </Label>
+                    <div className="bg-[#00C3F7] text-white px-3 py-1 text-xs font-body font-semibold rounded">Paystack</div>
+                  </div>
+
+                  {/* Stripe - For international cards */}
+                  <div className={`flex items-center space-x-3 p-4 border cursor-pointer transition-colors ${
+                    !isGhana ? 'border-blue-500 bg-blue-500/5' : 'border-black/10 hover:border-black'
+                  } ${paymentMethod === 'stripe' ? 'border-black bg-black/5' : ''}`}>
                     <RadioGroupItem value="stripe" id="stripe" data-testid="payment-stripe" />
                     <Label htmlFor="stripe" className="flex-1 cursor-pointer">
-                      <span className="font-body font-medium">Credit/Debit Card</span>
-                      <span className="font-body text-sm text-muted-text block">Secure payment via Stripe</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-body font-medium">Credit/Debit Card</span>
+                        {!isGhana && <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 font-body uppercase">Recommended</span>}
+                      </div>
+                      <span className="font-body text-sm text-muted-text block">Visa, Mastercard, Amex via Stripe (USD)</span>
                     </Label>
                     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/200px-Stripe_Logo%2C_revised_2016.svg.png" alt="Stripe" className="h-6" />
                   </div>
-                  <div className="flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors">
+
+                  {/* PayPal */}
+                  <div className={`flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors ${
+                    paymentMethod === 'paypal' ? 'border-black bg-black/5' : ''
+                  }`}>
                     <RadioGroupItem value="paypal" id="paypal" data-testid="payment-paypal" />
                     <Label htmlFor="paypal" className="flex-1 cursor-pointer">
                       <span className="font-body font-medium">PayPal</span>
-                      <span className="font-body text-sm text-muted-text block">Pay with your PayPal account</span>
+                      <span className="font-body text-sm text-muted-text block">Pay with your PayPal account (USD)</span>
                     </Label>
                     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/PayPal.svg/200px-PayPal.svg.png" alt="PayPal" className="h-6" />
                   </div>
-                  <div className="flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors">
-                    <RadioGroupItem value="paystack" id="paystack" data-testid="payment-paystack" />
-                    <Label htmlFor="paystack" className="flex-1 cursor-pointer">
-                      <span className="font-body font-medium">Paystack</span>
-                      <span className="font-body text-sm text-muted-text block">Pay with mobile money or card (Africa)</span>
-                    </Label>
-                    <div className="bg-green-600 text-white px-2 py-1 text-xs font-body rounded">Paystack</div>
-                  </div>
                 </RadioGroup>
 
-                <div className="mt-6">
-                  <Label className="font-body text-sm uppercase tracking-wider">Currency</Label>
-                  <Select value={currency} onValueChange={setCurrency}>
-                    <SelectTrigger className="mt-2 rounded-none border-black/20" data-testid="select-currency">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currencies.map(c => (
-                        <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code} - {c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Currency info based on location */}
+                <div className="mt-4 p-3 bg-bone-white border border-black/5">
+                  <p className="font-body text-xs text-muted-text">
+                    {isGhana ? (
+                      <>🇬🇭 You're shopping from Ghana. Prices are shown in <strong>GHS (Ghana Cedi)</strong>.</>
+                    ) : (
+                      <>🌍 You're shopping internationally. Prices are shown in <strong>USD (US Dollar)</strong>.</>
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -320,7 +349,7 @@ const CheckoutPage = () => {
                       <div className="flex-1">
                         <p className="font-body text-sm font-medium line-clamp-1">{item.name}</p>
                         <p className="font-body text-xs text-muted-text">Size: {item.size} × {item.quantity}</p>
-                        <p className="font-body text-sm mt-1">{item.currency} {(item.price * item.quantity).toFixed(2)}</p>
+                        <p className="font-body text-sm mt-1">{formatPrice(item.price * item.quantity, item.price_ghs ? item.price_ghs * item.quantity : null)}</p>
                       </div>
                     </div>
                   ))}
@@ -329,18 +358,18 @@ const CheckoutPage = () => {
                 <div className="border-t border-black/10 pt-4 space-y-3">
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
-                    <span>{currency} {cart.total.toFixed(2)}</span>
+                    <span>{formatPrice(subtotal, isGhana ? subtotal : null)}</span>
                   </div>
                   <div className="flex justify-between font-body text-sm">
-                    <span className="text-muted-text">Shipping</span>
-                    <span>{currency} {shippingCost.toFixed(2)}</span>
+                    <span className="text-muted-text">Shipping {shippingAddress.country === "Ghana" ? "(Local)" : "(International)"}</span>
+                    <span>{formatPrice(isGhana ? shippingCost / 15.38 : shippingCost, isGhana ? shippingCost : null)}</span>
                   </div>
                 </div>
 
                 <div className="border-t border-black/10 pt-4 mt-4 mb-6">
                   <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
-                    <span className="text-xl font-medium" data-testid="checkout-total">{currency} {total.toFixed(2)}</span>
+                    <span className="text-xl font-medium" data-testid="checkout-total">{formatPrice(isGhana ? total / 15.38 : total, isGhana ? total : null)}</span>
                   </div>
                 </div>
 
@@ -350,12 +379,12 @@ const CheckoutPage = () => {
                   className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                   data-testid="place-order-btn"
                 >
-                  {loading ? "Processing..." : "Place Order"}
+                  {loading ? "Processing..." : `Pay ${formatPrice(isGhana ? total / 15.38 : total, isGhana ? total : null)}`}
                 </Button>
 
                 <div className="flex items-center justify-center gap-2 mt-4 text-muted-text">
                   <Shield size={16} />
-                  <span className="font-body text-xs">Secure checkout</span>
+                  <span className="font-body text-xs">Secure checkout • {paymentMethod === 'paystack' ? 'Paystack' : paymentMethod === 'stripe' ? 'Stripe' : 'PayPal'} protected</span>
                 </div>
               </div>
             </div>

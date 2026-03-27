@@ -22,6 +22,7 @@ import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import ComparePage from "./pages/ComparePage";
 import VendorOnboarding from "./pages/VendorOnboarding";
+import PaymentCallbackPage from "./pages/PaymentCallbackPage";
 import { LocalizationProvider } from "./localization";
 import { UserActivityProvider } from "./context/UserActivityContext";
 import CookieConsent from "./components/CookieConsent";
@@ -316,7 +317,12 @@ function AppRouter() {
       } />
       <Route path="/payment/callback" element={
         <ProtectedRoute>
-          <OrderSuccessPage />
+          <PaymentCallbackPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/payment/paystack/callback" element={
+        <ProtectedRoute>
+          <PaymentCallbackPage />
         </ProtectedRoute>
       } />
       <Route path="/sell" element={<SellYourJerseyPage />} />
