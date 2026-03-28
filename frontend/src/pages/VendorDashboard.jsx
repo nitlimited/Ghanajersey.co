@@ -30,6 +30,7 @@ const VendorDashboard = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [uploadingImageIndex, setUploadingImageIndex] = useState(null);
 
   // Product form state
   const [productForm, setProductForm] = useState({
@@ -133,9 +134,16 @@ const VendorDashboard = () => {
 
   const handleSubmitProduct = async (e) => {
     e.preventDefault();
+
+    const uploadedImages = productForm.images.filter(img => img.trim() !== "");
     
     if (!productForm.name || !productForm.price || !productForm.price_ghs || !productForm.description) {
       toast.error("Please fill in all required fields including both USD and GHS prices");
+      return;
+    }
+
+    if (uploadedImages.length === 0) {
+      toast.error("Please upload at least one product image to storage");
       return;
     }
 
@@ -145,7 +153,7 @@ const VendorDashboard = () => {
         price: parseFloat(productForm.price),
         price_ghs: parseFloat(productForm.price_ghs),
         stock: parseInt(productForm.stock) || 0,
-        images: productForm.images.filter(img => img.trim() !== ""),
+        images: uploadedImages,
         allows_customization: productForm.allows_customization,
         customization_price: productForm.allows_customization ? parseFloat(productForm.customization_price) || 0 : 0,
         customization_price_ghs: productForm.allows_customization && productForm.customization_price_ghs 
@@ -221,6 +229,34 @@ const VendorDashboard = () => {
       fetchData();
     } catch (error) {
       toast.error("Failed to update stock");
+    }
+  };
+
+  const handleUploadProductImage = async (index, file) => {
+    if (!file) return;
+
+    const uploadData = new FormData();
+    uploadData.append("file", file);
+    setUploadingImageIndex(index);
+
+    try {
+      const res = await axios.post(`${API}/upload/product-image`, uploadData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
+        }
+      });
+
+      setProductForm((prev) => {
+        const newImages = [...prev.images];
+        newImages[index] = res.data.url;
+        return { ...prev, images: newImages };
+      });
+      toast.success("Image uploaded to storage");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to upload image");
+    } finally {
+      setUploadingImageIndex(null);
     }
   };
 
@@ -542,20 +578,25 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Image URLs (Front & Back)</Label>
-                  <p className="font-body text-xs text-muted-text mb-2">Add front image first, then back for hover effect</p>
+                  <Label className="font-body text-sm uppercase tracking-wider">Product Images (Saved to R2)</Label>
+                  <p className="font-body text-xs text-muted-text mb-2">Upload front image first, then back for hover effect. Product images are stored in your R2 bucket.</p>
                   {productForm.images.map((img, index) => (
-                    <Input
-                      key={index}
-                      value={img}
-                      onChange={(e) => {
-                        const newImages = [...productForm.images];
-                        newImages[index] = e.target.value;
-                        setProductForm({...productForm, images: newImages});
-                      }}
-                      placeholder={index === 0 ? "Front image URL" : "Back image URL (for hover)"}
-                      className="mt-2"
-                    />
+                    <div key={index} className="mt-2 space-y-2 border border-black/10 p-3">
+                      <div className="flex items-center gap-3">
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleUploadProductImage(index, e.target.files?.[0])}
+                          className="flex-1"
+                        />
+                        {uploadingImageIndex === index && (
+                          <span className="font-body text-xs text-muted-text">Uploading...</span>
+                        )}
+                      </div>
+                      {img && (
+                        <img src={img} alt={`Product ${index + 1}`} className="w-20 h-20 object-cover border border-black/10" />
+                      )}
+                    </div>
                   ))}
                   <Button
                     type="button"
