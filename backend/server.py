@@ -141,6 +141,39 @@ def init_storage():
         logger.error(f"Failed to initialize storage: {e}")
         return None
 
+async def store_uploaded_image(file: UploadFile, user_id: str, folder: str) -> dict:
+    """Upload an image to S3-compatible storage and persist file metadata."""
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only image files are allowed (jpeg, png, webp, gif)")
+
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size must be less than 5MB")
+
+    ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
+    file_path = f"{APP_NAME}/{folder}/{user_id}/{uuid.uuid4().hex[:12]}.{ext}"
+
+    result = put_object(file_path, data, file.content_type)
+    file_doc = {
+        "file_id": str(uuid.uuid4()),
+        "storage_path": result["path"],
+        "original_filename": file.filename,
+        "content_type": file.content_type,
+        "size": result.get("size", len(data)),
+        "user_id": user_id,
+        "is_deleted": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.uploaded_files.insert_one(file_doc)
+
+    return {
+        "file_id": file_doc["file_id"],
+        "path": result["path"],
+        "url": f"/api/files/{result['path']}",
+        "size": file_doc["size"]
+    }
+
 def put_object(path: str, data: bytes, content_type: str) -> dict:
     """Upload file to S3-compatible object storage."""
     client = init_storage()
@@ -848,47 +881,23 @@ async def upload_vendor_image(
     if user.get("role") != "vendor":
         raise HTTPException(status_code=403, detail="Only vendors can upload verification images")
     
-    # Validate file type
-    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only image files are allowed (jpeg, png, webp, gif)")
-    
-    # Read file data
-    data = await file.read()
-    
-    # Limit file size (5MB)
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File size must be less than 5MB")
-    
-    # Generate unique path
-    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-    file_path = f"{APP_NAME}/vendor-onboarding/{user['user_id']}/{uuid.uuid4().hex[:12]}.{ext}"
-    
     try:
-        result = put_object(file_path, data, file.content_type)
-        
-        # Store file reference in database
-        file_doc = {
-            "file_id": str(uuid.uuid4()),
-            "storage_path": result["path"],
-            "original_filename": file.filename,
-            "content_type": file.content_type,
-            "size": result.get("size", len(data)),
-            "user_id": user["user_id"],
-            "is_deleted": False,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.uploaded_files.insert_one(file_doc)
-        
-        return {
-            "file_id": file_doc["file_id"],
-            "path": result["path"],
-            "url": f"/api/files/{result['path']}",
-            "size": file_doc["size"]
-        }
+        return await store_uploaded_image(file, user["user_id"], "vendor-onboarding")
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload file")
+
+@api_router.post("/upload/product-image")
+async def upload_product_image(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_vendor_user)
+):
+    """Upload a product image to S3-compatible storage such as Cloudflare R2."""
+    try:
+        return await store_uploaded_image(file, user["user_id"], "product-images")
+    except Exception as e:
+        logger.error(f"Product image upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload product image")
 
 # Serve uploaded files
 @api_router.get("/files/{path:path}")
