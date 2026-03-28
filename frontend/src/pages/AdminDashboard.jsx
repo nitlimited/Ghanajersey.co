@@ -126,11 +126,31 @@ const AdminDashboard = () => {
       case "paid": return "text-ghana-green bg-ghana-green/10";
       case "pending": return "text-ashanti-gold bg-ashanti-gold/10";
       case "failed": return "text-ghana-red bg-ghana-red/10";
+      case "order_placed": return "text-slate-700 bg-slate-100";
       case "processing": return "text-blue-600 bg-blue-100";
       case "shipped": return "text-purple-600 bg-purple-100";
       case "delivered": return "text-ghana-green bg-ghana-green/10";
+      case "cancelled": return "text-ghana-red bg-ghana-red/10";
       default: return "text-muted-text bg-gray-100";
     }
+  };
+
+  const formatOrderStep = (status) => {
+    switch (status) {
+      case "order_placed": return "Order Placed";
+      case "processing": return "Processing";
+      case "shipped": return "Shipped";
+      case "delivered": return "Delivered";
+      case "cancelled": return "Cancelled";
+      default: return status || "Unknown";
+    }
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+    return date.toLocaleString();
   };
 
   if (loading) {
@@ -492,13 +512,13 @@ const AdminDashboard = () => {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-black/10">
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Order ID</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Customer</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Items</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Total</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Payment</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Confirmed</th>
+                    <tr className="border-b border-black/10">
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Order ID</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Customer</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Items & Vendor Progress</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Total</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Payment</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Confirmed</th>
                     <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Status</th>
                   </tr>
                 </thead>
@@ -507,10 +527,43 @@ const AdminDashboard = () => {
                     <tr key={order.order_id} className="border-b border-black/5">
                       <td className="py-4 px-4 font-body text-sm">{order.order_id.slice(-8)}</td>
                       <td className="py-4 px-4">
-                        <p className="font-body text-sm">{order.shipping_address?.name || "N/A"}</p>
+                        <p className="font-body text-sm">{order.shipping_address?.full_name || order.shipping_address?.name || "N/A"}</p>
                         <p className="font-body text-xs text-muted-text">{order.shipping_address?.phone}</p>
+                        <p className="font-body text-xs text-muted-text mt-1">{formatDateTime(order.created_at)}</p>
                       </td>
-                      <td className="py-4 px-4 font-body text-sm">{order.items?.length || 0} items</td>
+                      <td className="py-4 px-4">
+                        <div className="space-y-3 min-w-[320px]">
+                          {order.items?.map((item, index) => (
+                            <div key={`${order.order_id}-${item.product_id}-${index}`} className="border border-black/10 bg-white p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-body text-sm font-medium">{item.name}</p>
+                                  <p className="font-body text-xs text-muted-text">
+                                    {item.vendor_name} • Size {item.size} • Qty {item.quantity}
+                                  </p>
+                                </div>
+                                <span className={`inline-block px-2 py-1 text-xs font-body whitespace-nowrap ${getStatusColor(item.processing_status)}`}>
+                                  {formatOrderStep(item.processing_status)}
+                                </span>
+                              </div>
+
+                              <div className="mt-3">
+                                <p className="font-body text-[11px] uppercase tracking-wider text-muted-text mb-2">Processing Timeline</p>
+                                <div className="space-y-2">
+                                  {(item.processing_history?.length ? item.processing_history : [{ status: "order_placed", timestamp: order.created_at }]).map((step, stepIndex) => (
+                                    <div key={`${order.order_id}-${item.product_id}-${stepIndex}`} className="flex items-center justify-between gap-3 text-xs">
+                                      <span className={`inline-block px-2 py-1 font-body ${getStatusColor(step.status)}`}>
+                                        {formatOrderStep(step.status)}
+                                      </span>
+                                      <span className="font-body text-muted-text">{formatDateTime(step.timestamp)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
                       <td className="py-4 px-4 font-body text-sm font-medium">${order.total?.toFixed(2)}</td>
                       <td className="py-4 px-4">
                         <span className={`inline-block px-2 py-1 text-xs font-body ${getStatusColor(order.payment_status)}`}>
