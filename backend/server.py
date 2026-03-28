@@ -53,6 +53,11 @@ PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_BASE_URL = "https://api.paystack.co"
 
+# Email Config
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "Black Star Threads <no-reply@ghanajersey.co>")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "easante@nitlimited.com")
+
 # Create the main app
 app = FastAPI(title="Black Star Threads API", version="1.0.0")
 
@@ -67,6 +72,44 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ==================== OBJECT STORAGE FUNCTIONS ====================
+
+async def send_resend_email(to_email: str, subject: str, html: str, text: Optional[str] = None) -> bool:
+    """Send transactional email with Resend when configured."""
+    if not RESEND_API_KEY:
+        logger.warning("RESEND_API_KEY not set; skipping email '%s' to %s", subject, to_email)
+        return False
+
+    payload = {
+        "from": RESEND_FROM_EMAIL,
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+    }
+    if text:
+        payload["text"] = text
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+        return True
+    except Exception as exc:
+        logger.error("Failed to send Resend email to %s: %s", to_email, exc)
+        return False
+
+def build_confirmation_link(request: Request, order_id: str, token: str) -> str:
+    base_url = os.environ.get("FRONTEND_URL") or str(request.base_url).rstrip("/")
+    return f"{base_url}/api/orders/{order_id}/confirm/{token}"
+
+async def notify_admin(subject: str, html: str, text: Optional[str] = None) -> bool:
+    return await send_resend_email(ADMIN_EMAIL, subject, html, text=text)
 
 def init_storage():
     """Initialize S3-compatible storage client once and reuse it."""
@@ -558,6 +601,24 @@ async def register(user_data: UserCreate):
     }
     
     await db.users.insert_one(user_doc)
+
+    if user_data.role == "customer":
+        await send_resend_email(
+            user_data.email,
+            "Welcome to Black Star Threads",
+            f"""
+            <div>
+              <h2>Welcome to Black Star Threads</h2>
+              <p>Hi {user_data.name},</p>
+              <p>Your customer account has been created successfully.</p>
+              <p>You can now browse jerseys, save favorites, and place orders from the marketplace.</p>
+            </div>
+            """,
+            text=(
+                f"Hi {user_data.name}, welcome to Black Star Threads. "
+                "Your customer account has been created successfully."
+            ),
+        )
     
     token = create_jwt_token(user_id, user_data.role)
     
@@ -644,6 +705,22 @@ async def exchange_session(request: Request):
             "vendor_profile": None
         }
         await db.users.insert_one(user_doc)
+        await send_resend_email(
+            email,
+            "Welcome to Black Star Threads",
+            f"""
+            <div>
+              <h2>Welcome to Black Star Threads</h2>
+              <p>Hi {name},</p>
+              <p>Your customer account has been created successfully.</p>
+              <p>You can now browse jerseys, save favorites, and place orders from the marketplace.</p>
+            </div>
+            """,
+            text=(
+                f"Hi {name}, welcome to Black Star Threads. "
+                "Your customer account has been created successfully."
+            ),
+        )
     
     # Store session
     session_doc = {
@@ -972,20 +1049,47 @@ async def update_vendor_order_status(order_id: str, status: str, user: dict = De
     if not vendor_items:
         raise HTTPException(status_code=403, detail="Not authorized to update this order")
     
+    status_timestamp = datetime.now(timezone.utc).isoformat()
+
     # Update vendor-specific status for this order
     await db.orders.update_one(
         {"order_id": order_id},
-        {"$set": {
-            f"vendor_status.{user['user_id']}": status,
-            "order_status": status  # Also update main status
-        }}
+        {
+            "$set": {
+                f"vendor_status.{user['user_id']}": status,
+                "order_status": status  # Also update main status
+            },
+            "$push": {
+                f"vendor_status_history.{user['user_id']}": {
+                    "status": status,
+                    "timestamp": status_timestamp,
+                    "source": "vendor"
+                }
+            }
+        }
     )
+
+    if status == "delivered":
+        await notify_admin(
+            f"Vendor marked order delivered: {order_id}",
+            f"""
+            <div>
+              <h2>Order marked delivered</h2>
+              <p>Vendor <strong>{user.get('name', 'Vendor')}</strong> marked order <strong>{order_id}</strong> as delivered.</p>
+              <p>Customer email: {order.get('customer_email', 'N/A')}</p>
+            </div>
+            """,
+            text=(
+                f"Vendor {user.get('name', 'Vendor')} marked order {order_id} as delivered. "
+                f"Customer email: {order.get('customer_email', 'N/A')}"
+            ),
+        )
     
     return {"message": f"Order status updated to {status}"}
 
 @api_router.post("/vendor/orders/{order_id}/send-confirmation")
-async def send_delivery_confirmation_request(order_id: str, user: dict = Depends(get_vendor_user)):
-    """Vendor sends delivery confirmation request to customer (prepares for email integration)"""
+async def send_delivery_confirmation_request(order_id: str, request: Request, user: dict = Depends(get_vendor_user)):
+    """Vendor sends delivery confirmation request to customer."""
     order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1001,12 +1105,32 @@ async def send_delivery_confirmation_request(order_id: str, user: dict = Depends
             "confirmation_requested_by": user["user_id"]
         }}
     )
-    
-    # In production, this would trigger an email to the customer
-    # For now, return the confirmation link
+
+    confirmation_link = build_confirmation_link(request, order_id, confirmation_token)
+    vendor_name = user.get("name", "your vendor")
+    customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
+    await send_resend_email(
+        order.get("customer_email"),
+        f"Confirm delivery for order {order_id}",
+        f"""
+        <div>
+          <h2>Delivery confirmation requested</h2>
+          <p>Hi {customer_name},</p>
+          <p>{vendor_name} has marked your order as delivered. Please confirm once you have received it.</p>
+          <p><a href="{confirmation_link}">Confirm delivery</a></p>
+          <p>If the button does not work, copy this link into your browser:</p>
+          <p>{confirmation_link}</p>
+        </div>
+        """,
+        text=(
+            f"Hi {customer_name}, {vendor_name} has requested delivery confirmation for order {order_id}. "
+            f"Confirm here: {confirmation_link}"
+        ),
+    )
+
     return {
         "message": "Confirmation request sent",
-        "confirmation_link": f"/api/orders/{order_id}/confirm/{confirmation_token}"
+        "confirmation_link": confirmation_link
     }
 
 @api_router.get("/orders/{order_id}/confirm/{token}")
@@ -1028,6 +1152,42 @@ async def confirm_delivery(order_id: str, token: str):
             "delivery_confirmed": True,
             "delivery_confirmed_at": datetime.now(timezone.utc).isoformat()
         }}
+    )
+
+    vendor_ids = list({item.get("vendor_id") for item in order.get("items", []) if item.get("vendor_id")})
+    vendors = []
+    if vendor_ids:
+        vendors = await db.users.find(
+            {"user_id": {"$in": vendor_ids}},
+            {"_id": 0, "user_id": 1, "email": 1, "name": 1},
+        ).to_list(len(vendor_ids))
+
+    customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
+    for vendor in vendors:
+        if not vendor.get("email"):
+            continue
+        await send_resend_email(
+            vendor["email"],
+            f"Customer confirmed receipt: {order_id}",
+            f"""
+            <div>
+              <h2>Receipt confirmed</h2>
+              <p>Hi {vendor.get('name') or 'Vendor'},</p>
+              <p>{customer_name} confirmed receipt of order <strong>{order_id}</strong>.</p>
+            </div>
+            """,
+            text=f"{customer_name} confirmed receipt of order {order_id}.",
+        )
+
+    await notify_admin(
+        f"Customer confirmed receipt: {order_id}",
+        f"""
+        <div>
+          <h2>Customer confirmed receipt</h2>
+          <p>{customer_name} confirmed receipt of order <strong>{order_id}</strong>.</p>
+        </div>
+        """,
+        text=f"{customer_name} confirmed receipt of order {order_id}.",
     )
     
     return {"message": "Delivery confirmed. Thank you!"}
@@ -1868,6 +2028,7 @@ async def get_recently_viewed(user: dict = Depends(get_current_user)):
 @api_router.post("/orders")
 async def create_order(order_data: OrderCreate, user: dict = Depends(get_current_user)):
     order_id = f"order_{uuid.uuid4().hex[:12]}"
+    created_at = datetime.now(timezone.utc).isoformat()
     
     # Use currency to determine which price to use
     use_ghs = order_data.currency == "GHS"
@@ -1916,6 +2077,20 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
     
     total = subtotal + shipping_cost
     
+    vendor_status = {
+        item["vendor_id"]: "order_placed"
+        for item in items
+        if item.get("vendor_id")
+    }
+    vendor_status_history = {
+        vendor_id: [{
+            "status": "order_placed",
+            "timestamp": created_at,
+            "source": "system"
+        }]
+        for vendor_id in vendor_status
+    }
+
     order_doc = {
         "order_id": order_id,
         "customer_id": user["user_id"],
@@ -1930,11 +2105,92 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
         "payment_method": order_data.payment_method,
         "payment_status": "pending",
         "order_status": "pending",
+        "vendor_status": vendor_status,
+        "vendor_status_history": vendor_status_history,
         "tracking_number": None,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": created_at
     }
     
     await db.orders.insert_one(order_doc)
+
+    customer_name = order_data.shipping_address.full_name or user.get("name") or "Customer"
+    formatted_total = f"{order_doc['currency']} {order_doc['total']:.2f}"
+    vendor_ids = list({item["vendor_id"] for item in items if item.get("vendor_id")})
+
+    await send_resend_email(
+        user["email"],
+        f"Order received: {order_id}",
+        f"""
+        <div>
+          <h2>Thanks for your order</h2>
+          <p>Hi {customer_name},</p>
+          <p>We have received your order <strong>{order_id}</strong>.</p>
+          <p>Total: <strong>{formatted_total}</strong></p>
+          <p>Payment method: {order_doc['payment_method']}</p>
+          <p>We will send another update as your order progresses.</p>
+        </div>
+        """,
+        text=(
+            f"Hi {customer_name}, we have received your order {order_id}. "
+            f"Total: {formatted_total}. Payment method: {order_doc['payment_method']}."
+        ),
+    )
+
+    await notify_admin(
+        f"New order purchased: {order_id}",
+        f"""
+        <div>
+          <h2>New order purchased</h2>
+          <p>Order <strong>{order_id}</strong> has been placed.</p>
+          <p>Customer: {customer_name} ({user['email']})</p>
+          <p>Total: <strong>{formatted_total}</strong></p>
+          <p>Payment method: {order_doc['payment_method']}</p>
+        </div>
+        """,
+        text=(
+            f"New order purchased: {order_id}. Customer: {customer_name} ({user['email']}). "
+            f"Total: {formatted_total}. Payment method: {order_doc['payment_method']}."
+        ),
+    )
+
+    if vendor_ids:
+        vendors = await db.users.find(
+            {"user_id": {"$in": vendor_ids}},
+            {"_id": 0, "user_id": 1, "email": 1, "name": 1},
+        ).to_list(len(vendor_ids))
+
+        items_by_vendor: Dict[str, List[Dict[str, Any]]] = {}
+        for item in items:
+            vendor_id = item.get("vendor_id")
+            if vendor_id:
+                items_by_vendor.setdefault(vendor_id, []).append(item)
+
+        for vendor in vendors:
+            vendor_items = items_by_vendor.get(vendor["user_id"], [])
+            if not vendor_items or not vendor.get("email"):
+                continue
+
+            item_lines = "".join(
+                f"<li>{item['name']} x {item['quantity']} ({item['size']})</li>"
+                for item in vendor_items
+            )
+            await send_resend_email(
+                vendor["email"],
+                f"New order received: {order_id}",
+                f"""
+                <div>
+                  <h2>You received a new order</h2>
+                  <p>Hi {vendor.get('name') or 'Vendor'},</p>
+                  <p>Order <strong>{order_id}</strong> includes the following items from your store:</p>
+                  <ul>{item_lines}</ul>
+                  <p>Customer: {customer_name}</p>
+                </div>
+                """,
+                text=(
+                    f"Hi {vendor.get('name') or 'Vendor'}, you received a new order {order_id} "
+                    f"from {customer_name}."
+                ),
+            )
     
     # Clear cart
     await db.carts.delete_one({"user_id": user["user_id"]})
@@ -2587,8 +2843,26 @@ async def approve_vendor(user_id: str, approved: bool, rejection_reason: Optiona
         {"user_id": user_id},
         {"$set": update_data}
     )
-    
-    # TODO: Send email notification to vendor
+
+    subject = "Your vendor application has been approved" if approved else "Update on your vendor application"
+    vendor_name = vendor.get("name") or "Vendor"
+    status_message = (
+        "Your seller account is now approved and you can access the vendor dashboard."
+        if approved
+        else f"Your application was not approved at this time. Reason: {rejection_reason or 'No reason provided.'}"
+    )
+    await send_resend_email(
+        vendor["email"],
+        subject,
+        f"""
+        <div>
+          <h2>{subject}</h2>
+          <p>Hi {vendor_name},</p>
+          <p>{status_message}</p>
+        </div>
+        """,
+        text=f"Hi {vendor_name}, {status_message}",
+    )
     
     return {"message": f"Vendor {'approved' if approved else 'rejected'}"}
 
@@ -2607,10 +2881,43 @@ async def update_vendor_status(user_id: str, is_active: bool, user: dict = Depen
 @api_router.get("/admin/orders")
 async def get_all_orders(user: dict = Depends(get_admin_user)):
     orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    vendor_ids = {
+        item.get("vendor_id")
+        for order in orders
+        for item in order.get("items", [])
+        if item.get("vendor_id")
+    }
+    vendors_by_id = {}
+
+    if vendor_ids:
+        vendors = await db.users.find(
+            {"user_id": {"$in": list(vendor_ids)}},
+            {"_id": 0, "user_id": 1, "name": 1, "email": 1}
+        ).to_list(len(vendor_ids))
+        vendors_by_id = {vendor["user_id"]: vendor for vendor in vendors}
     
     for order in orders:
         if isinstance(order.get('created_at'), str):
             order['created_at'] = datetime.fromisoformat(order['created_at'])
+
+        vendor_status = order.get("vendor_status", {})
+        vendor_status_history = order.get("vendor_status_history", {})
+        enriched_items = []
+
+        for item in order.get("items", []):
+            vendor_id = item.get("vendor_id")
+            vendor = vendors_by_id.get(vendor_id, {})
+            history = vendor_status_history.get(vendor_id, [])
+
+            enriched_items.append({
+                **item,
+                "vendor_name": vendor.get("name", "Vendor"),
+                "vendor_email": vendor.get("email"),
+                "processing_status": vendor_status.get(vendor_id, "order_placed"),
+                "processing_history": history,
+            })
+
+        order["items"] = enriched_items
     
     return orders
 

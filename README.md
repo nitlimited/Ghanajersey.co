@@ -68,6 +68,8 @@ Suggested settings:
 | `PAYSTACK_SECRET_KEY` | Optional | Needed for Paystack payments |
 | `PAYSTACK_PUBLIC_KEY` | Optional | Needed for Paystack frontend flow |
 | `RESEND_API_KEY` | Optional | Needed when Resend is used for transactional emails |
+| `RESEND_FROM_EMAIL` | Optional | Verified sender identity used for Resend emails |
+| `ADMIN_EMAIL` | Optional | Receives internal marketplace notifications such as new orders and delivery confirmations |
 | `S3_BUCKET` | Recommended | Bucket name for vendor onboarding uploads |
 | `S3_REGION` | Optional | S3 or compatible storage region |
 | `S3_ENDPOINT_URL` | Optional | Custom endpoint for MinIO, R2, Spaces, or other S3-compatible storage |
@@ -96,6 +98,8 @@ CORS_ORIGINS=https://ghanajersey.co
 FRONTEND_URL=https://ghanajersey.co
 JWT_SECRET_KEY=replace-with-a-long-random-secret
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
+RESEND_FROM_EMAIL=Black Star Threads <no-reply@ghanajersey.co>
+ADMIN_EMAIL=admin@ghanajersey.co
 S3_BUCKET=ghanajersey-uploads
 ```
 
@@ -117,6 +121,8 @@ pip install -r requirements.txt
 export MONGO_URL="your-mongodb-url"
 export DB_NAME="ghanajersey"
 export RESEND_API_KEY="re_xxxxxxxxxxxxxxxxx"
+export RESEND_FROM_EMAIL="Black Star Threads <no-reply@ghanajersey.co>"
+export ADMIN_EMAIL="admin@ghanajersey.co"
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -155,6 +161,8 @@ Before going live, verify:
 - `JWT_SECRET_KEY` is set to a strong value
 - payment keys are set if Stripe or Paystack should work in production
 - `RESEND_API_KEY` is set if transactional emails should work in production
+- `RESEND_FROM_EMAIL` is set to a verified Resend sender identity
+- `ADMIN_EMAIL` is set to the address that should receive internal marketplace alerts
 - object storage credentials are set if vendor onboarding uploads should work
 
 Health endpoints:
