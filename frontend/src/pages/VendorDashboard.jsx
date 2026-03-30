@@ -242,8 +242,7 @@ const VendorDashboard = () => {
     try {
       const res = await axios.post(`${API}/upload/product-image`, uploadData, {
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data"
+          Authorization: `Bearer ${token}`
         }
       });
 

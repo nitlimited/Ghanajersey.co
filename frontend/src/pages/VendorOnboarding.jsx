@@ -924,10 +924,7 @@ const VendorOnboarding = () => {
                           try {
                             toast.loading("Uploading image...", { id: `upload-jersey-${index}` });
                             const res = await axios.post(`${API}/upload/vendor-image`, uploadData, {
-                              headers: { 
-                                Authorization: `Bearer ${token}`,
-                                'Content-Type': 'multipart/form-data'
-                              }
+                              headers: { Authorization: `Bearer ${token}` }
                             });
                             const newPhotos = [...formData.verification.jersey_photos];
                             newPhotos[index] = res.data.path;
@@ -983,10 +980,7 @@ const VendorOnboarding = () => {
                       try {
                         toast.loading("Uploading image...", { id: 'upload-packaging' });
                         const res = await axios.post(`${API}/upload/vendor-image`, uploadData, {
-                          headers: { 
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'multipart/form-data'
-                          }
+                          headers: { Authorization: `Bearer ${token}` }
                         });
                         updateFormData('verification', 'packaging_photo', res.data.path);
                         toast.success("Image uploaded!", { id: 'upload-packaging' });
