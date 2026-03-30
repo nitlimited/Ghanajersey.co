@@ -105,8 +105,8 @@ R2_PUBLIC_URL=https://<your-public-r2-url>
 S3_BUCKET=ghanajersey
 S3_REGION=auto
 S3_ENDPOINT_URL=https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com
-AWS_ACCESS_KEY_ID=<your-r2-access-key-id>
-AWS_SECRET_ACCESS_KEY=<your-r2-secret-access-key>
+AWS_ACCESS_KEY_ID=2746d9eb1c15dab98aa23a1c679b6550
+AWS_SECRET_ACCESS_KEY=0e06315c109bac57f89c0086843dde91739ced057264270658006ef9db3fae14
 ```
 
 Important:
@@ -141,8 +141,8 @@ export R2_PUBLIC_URL="https://1d41c778934a555b292d094d17777c61.r2.cloudflarestor
 export S3_BUCKET="ghanajersey"
 export S3_REGION="auto"
 export S3_ENDPOINT_URL="https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com"
-export AWS_ACCESS_KEY_ID="<your-r2-access-key-id>"
-export AWS_SECRET_ACCESS_KEY="<your-r2-secret-access-key>"
+export AWS_ACCESS_KEY_ID="2746d9eb1c15dab98aa23a1c679b6550"
+export AWS_SECRET_ACCESS_KEY="0e06315c109bac57f89c0086843dde91739ced057264270658006ef9db3fae14"
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
 ```
 
