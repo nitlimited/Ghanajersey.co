@@ -102,12 +102,20 @@ RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
 RESEND_FROM_EMAIL=Black Star Threads <no-reply@ghanajersey.co>
 ADMIN_EMAIL=admin@ghanajersey.co
 R2_PUBLIC_URL=https://<your-public-r2-url>
-S3_BUCKET=ghanajersey-uploads
+S3_BUCKET=ghanajersey
 S3_REGION=auto
-S3_ENDPOINT_URL=https://<your-account-id>.r2.cloudflarestorage.com
+S3_ENDPOINT_URL=https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com
 AWS_ACCESS_KEY_ID=<your-r2-access-key-id>
 AWS_SECRET_ACCESS_KEY=<your-r2-secret-access-key>
 ```
+
+Important:
+- `R2_PUBLIC_URL` is the public bucket/base URL used for displaying images in the storefront
+- `S3_ENDPOINT_URL` is the Cloudflare R2 API endpoint used for uploads
+- Do not include the bucket path in `S3_ENDPOINT_URL`
+- Example:
+  - `R2_PUBLIC_URL=https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com/ghanajersey`
+  - `S3_ENDPOINT_URL=https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com`
 
 Leave the frontend build arg as:
 
@@ -129,10 +137,10 @@ export DB_NAME="ghanajersey"
 export RESEND_API_KEY="re_xxxxxxxxxxxxxxxxx"
 export RESEND_FROM_EMAIL="Black Star Threads <no-reply@ghanajersey.co>"
 export ADMIN_EMAIL="admin@ghanajersey.co"
-export R2_PUBLIC_URL="https://<your-public-r2-url>"
-export S3_BUCKET="ghanajersey-uploads"
+export R2_PUBLIC_URL="https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com/ghanajersey"
+export S3_BUCKET="ghanajersey"
 export S3_REGION="auto"
-export S3_ENDPOINT_URL="https://<your-account-id>.r2.cloudflarestorage.com"
+export S3_ENDPOINT_URL="https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com"
 export AWS_ACCESS_KEY_ID="<your-r2-access-key-id>"
 export AWS_SECRET_ACCESS_KEY="<your-r2-secret-access-key>"
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
