@@ -70,12 +70,13 @@ Suggested settings:
 | `RESEND_API_KEY` | Optional | Needed when Resend is used for transactional emails |
 | `RESEND_FROM_EMAIL` | Optional | Verified sender identity used for Resend emails |
 | `ADMIN_EMAIL` | Optional | Receives internal marketplace notifications such as new orders and delivery confirmations |
-| `S3_BUCKET` | Recommended | Bucket name for vendor onboarding uploads |
-| `S3_REGION` | Optional | S3 or compatible storage region |
-| `S3_ENDPOINT_URL` | Optional | Custom endpoint for MinIO, R2, Spaces, or other S3-compatible storage |
-| `AWS_ACCESS_KEY_ID` | Recommended | Access key for object storage |
-| `AWS_SECRET_ACCESS_KEY` | Recommended | Secret key for object storage |
-| `AWS_SESSION_TOKEN` | Optional | Session token if your storage provider requires one |
+| `R2_PUBLIC_URL` | Optional | Public Cloudflare R2 base URL used for storefront image delivery |
+| `S3_BUCKET` | Recommended | Cloudflare R2 bucket name for vendor onboarding and product image uploads |
+| `S3_REGION` | Optional | Cloudflare R2 region. Use `auto` |
+| `S3_ENDPOINT_URL` | Optional | Cloudflare R2 endpoint URL |
+| `AWS_ACCESS_KEY_ID` | Recommended | Cloudflare R2 access key ID |
+| `AWS_SECRET_ACCESS_KEY` | Recommended | Cloudflare R2 secret access key |
+| `AWS_SESSION_TOKEN` | Optional | Leave empty unless your R2 setup explicitly requires it |
 | `JWT_ALGORITHM` | Optional | Defaults to `HS256` |
 | `JWT_EXPIRATION_HOURS` | Optional | Defaults to `168` |
 
@@ -100,7 +101,12 @@ JWT_SECRET_KEY=replace-with-a-long-random-secret
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
 RESEND_FROM_EMAIL=Black Star Threads <no-reply@ghanajersey.co>
 ADMIN_EMAIL=admin@ghanajersey.co
+R2_PUBLIC_URL=https://<your-public-r2-url>
 S3_BUCKET=ghanajersey-uploads
+S3_REGION=auto
+S3_ENDPOINT_URL=https://<your-account-id>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID=<your-r2-access-key-id>
+AWS_SECRET_ACCESS_KEY=<your-r2-secret-access-key>
 ```
 
 Leave the frontend build arg as:
@@ -123,6 +129,12 @@ export DB_NAME="ghanajersey"
 export RESEND_API_KEY="re_xxxxxxxxxxxxxxxxx"
 export RESEND_FROM_EMAIL="Black Star Threads <no-reply@ghanajersey.co>"
 export ADMIN_EMAIL="admin@ghanajersey.co"
+export R2_PUBLIC_URL="https://<your-public-r2-url>"
+export S3_BUCKET="ghanajersey-uploads"
+export S3_REGION="auto"
+export S3_ENDPOINT_URL="https://<your-account-id>.r2.cloudflarestorage.com"
+export AWS_ACCESS_KEY_ID="<your-r2-access-key-id>"
+export AWS_SECRET_ACCESS_KEY="<your-r2-secret-access-key>"
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -145,7 +157,38 @@ The root `Dockerfile` now:
 
 This project now uses:
 - the official `stripe` Python SDK for Stripe Checkout and webhooks
-- S3-compatible object storage through `boto3` for vendor image uploads
+- Cloudflare R2 for vendor onboarding and product image uploads
+- Resend for transactional emails and internal marketplace notifications
+
+## Current Production Behavior
+
+### Image Storage
+
+- Vendor onboarding verification images upload through the backend and are stored in the configured Cloudflare R2 bucket
+- Vendor product images also upload through the backend and are stored in the same Cloudflare R2 bucket
+- The vendor dashboard now requires file uploads for product images; manual external image URLs are no longer used for new product submissions
+- When `R2_PUBLIC_URL` is set, uploaded image URLs are returned using that public R2 base URL for storefront rendering
+- In Coolify, the app uses the existing bucket/env variable names to connect to Cloudflare R2
+
+### Email Notifications
+
+When Resend is configured, the backend sends:
+
+- welcome emails for newly created customer accounts
+- order confirmation emails to customers after purchase
+- new order notification emails to each vendor involved in the order
+- new order purchased notifications to `ADMIN_EMAIL`
+- delivery confirmation request emails from vendor dashboard actions to customers
+- vendor approval or rejection emails during onboarding review
+- delivery-success notifications to `ADMIN_EMAIL` when a vendor marks an order as delivered
+- receipt-confirmed notifications to both the vendor and `ADMIN_EMAIL` when the customer confirms receipt from the email link
+
+### Admin Order Visibility
+
+- The admin dashboard orders tab now shows per-product vendor processing progress
+- New orders begin with `Order Placed`
+- Vendor updates append timeline steps such as `Processing`, `Shipped`, `Delivered`, or `Cancelled`
+- Older orders created before this change may show a shorter history than newly created orders
 
 FastAPI serves:
 - `/api/*` for backend endpoints
@@ -163,7 +206,8 @@ Before going live, verify:
 - `RESEND_API_KEY` is set if transactional emails should work in production
 - `RESEND_FROM_EMAIL` is set to a verified Resend sender identity
 - `ADMIN_EMAIL` is set to the address that should receive internal marketplace alerts
-- object storage credentials are set if vendor onboarding uploads should work
+- Cloudflare R2 credentials are set if vendor onboarding and product image uploads should work
+- if using Cloudflare R2, `S3_REGION`, `S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` are all set correctly
 
 Health endpoints:
 - `/api/health/live` for liveness
@@ -185,6 +229,23 @@ Check:
 - the container is exposing port `8000`
 - the health check path is `/api/health/ready`
 - the start command from the Dockerfile is running successfully
+
+### Images are not saving to Cloudflare R2
+
+Check:
+- `S3_BUCKET` is the exact R2 bucket name
+- `S3_REGION=auto`
+- `S3_ENDPOINT_URL` matches your Cloudflare account R2 endpoint exactly
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are valid for that bucket
+- vendors are uploading images through the product or onboarding forms rather than trying to paste external URLs
+
+### Emails are not being delivered
+
+Check:
+- `RESEND_API_KEY` is valid
+- `RESEND_FROM_EMAIL` is a verified sender or domain in Resend
+- `ADMIN_EMAIL` is set to the inbox that should receive internal notifications
+- your deployment can reach the public Resend API
 
 ### Refreshing a frontend route gives 404
 

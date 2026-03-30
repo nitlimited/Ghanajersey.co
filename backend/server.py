@@ -57,6 +57,7 @@ PAYSTACK_BASE_URL = "https://api.paystack.co"
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "Black Star Threads <no-reply@ghanajersey.co>")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "easante@nitlimited.com")
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
 
 # Create the main app
 app = FastAPI(title="Black Star Threads API", version="1.0.0")
@@ -110,6 +111,11 @@ def build_confirmation_link(request: Request, order_id: str, token: str) -> str:
 
 async def notify_admin(subject: str, html: str, text: Optional[str] = None) -> bool:
     return await send_resend_email(ADMIN_EMAIL, subject, html, text=text)
+
+def build_file_url(path: str) -> str:
+    if R2_PUBLIC_URL:
+        return f"{R2_PUBLIC_URL}/{path}"
+    return f"/api/files/{path}"
 
 def init_storage():
     """Initialize S3-compatible storage client once and reuse it."""
@@ -170,7 +176,7 @@ async def store_uploaded_image(file: UploadFile, user_id: str, folder: str) -> d
     return {
         "file_id": file_doc["file_id"],
         "path": result["path"],
-        "url": f"/api/files/{result['path']}",
+        "url": build_file_url(result["path"]),
         "size": file_doc["size"]
     }
 
@@ -912,8 +918,12 @@ async def get_file(path: str, request: Request, auth: Optional[str] = None):
     elif auth:
         token = auth
     
-    # For public vendor images, allow access without auth
-    if not path.startswith(f"{APP_NAME}/vendor-onboarding/"):
+    # Public storefront images and onboarding review images can be read without auth
+    public_prefixes = [
+        f"{APP_NAME}/vendor-onboarding/",
+        f"{APP_NAME}/product-images/",
+    ]
+    if not any(path.startswith(prefix) for prefix in public_prefixes):
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")
     
