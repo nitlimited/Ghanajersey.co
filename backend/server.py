@@ -21,6 +21,7 @@ import hashlib
 import requests
 import boto3
 import stripe
+from urllib.parse import urlparse, urlunparse
 
 ROOT_DIR = Path(__file__).parent
 FRONTEND_BUILD_DIR = ROOT_DIR.parent / "frontend" / "build"
@@ -132,7 +133,27 @@ def init_storage():
         if S3_REGION:
             client_kwargs["region_name"] = S3_REGION
         if S3_ENDPOINT_URL:
-            client_kwargs["endpoint_url"] = S3_ENDPOINT_URL
+            parsed_endpoint = urlparse(S3_ENDPOINT_URL)
+            normalized_endpoint = S3_ENDPOINT_URL
+
+            # Cloudflare R2 API endpoint should not include the bucket path.
+            # If a bucket URL was pasted in by mistake, strip the path and keep only scheme + host.
+            if parsed_endpoint.scheme and parsed_endpoint.netloc and parsed_endpoint.path not in ("", "/"):
+                normalized_endpoint = urlunparse((
+                    parsed_endpoint.scheme,
+                    parsed_endpoint.netloc,
+                    "",
+                    "",
+                    "",
+                    "",
+                ))
+                logger.warning(
+                    "Normalized storage endpoint from %s to %s for R2 compatibility",
+                    S3_ENDPOINT_URL,
+                    normalized_endpoint,
+                )
+
+            client_kwargs["endpoint_url"] = normalized_endpoint
         if os.environ.get("AWS_ACCESS_KEY_ID"):
             client_kwargs["aws_access_key_id"] = os.environ.get("AWS_ACCESS_KEY_ID")
         if os.environ.get("AWS_SECRET_ACCESS_KEY"):
@@ -889,6 +910,8 @@ async def upload_vendor_image(
     
     try:
         return await store_uploaded_image(file, user["user_id"], "vendor-onboarding")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload file")
@@ -896,14 +919,19 @@ async def upload_vendor_image(
 @api_router.post("/upload/product-image")
 async def upload_product_image(
     file: UploadFile = File(...),
-    user: dict = Depends(get_vendor_user)
+    user: dict = Depends(get_current_user)
 ):
     """Upload a product image to S3-compatible storage such as Cloudflare R2."""
+    if user.get("role") != "vendor":
+        raise HTTPException(status_code=403, detail="Only vendors can upload product images")
+
     try:
         return await store_uploaded_image(file, user["user_id"], "product-images")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Product image upload failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to upload product image")
+        raise HTTPException(status_code=500, detail=f"Failed to upload product image: {str(e)}")
 
 # Serve uploaded files
 @api_router.get("/files/{path:path}")
