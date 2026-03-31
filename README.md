@@ -79,6 +79,7 @@ Suggested settings:
 | `AWS_SESSION_TOKEN` | Optional | Leave empty unless your R2 setup explicitly requires it |
 | `JWT_ALGORITHM` | Optional | Defaults to `HS256` |
 | `JWT_EXPIRATION_HOURS` | Optional | Defaults to `168` |
+| `REACT_APP_ADMIN_PORTAL_PATH` | Optional | Private frontend route used for the admin login and dashboard. Example: `/control-room` |
 
 ### Optional Build Argument
 
@@ -101,12 +102,13 @@ JWT_SECRET_KEY=replace-with-a-long-random-secret
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
 RESEND_FROM_EMAIL=Black Star Threads <no-reply@ghanajersey.co>
 ADMIN_EMAIL=admin@ghanajersey.co
+REACT_APP_ADMIN_PORTAL_PATH=/control-room
 R2_PUBLIC_URL=https://<your-public-r2-url>
 S3_BUCKET=ghanajersey
 S3_REGION=auto
 S3_ENDPOINT_URL=https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com
-AWS_ACCESS_KEY_ID=2746d9eb1c15dab98aa23a1c679b6550
-AWS_SECRET_ACCESS_KEY=0e06315c109bac57f89c0086843dde91739ced057264270658006ef9db3fae14
+AWS_ACCESS_KEY_ID=your-r2-access-key-id
+AWS_SECRET_ACCESS_KEY=your-r2-secret-access-key
 ```
 
 Important:
@@ -123,6 +125,12 @@ Leave the frontend build arg as:
 REACT_APP_BACKEND_URL=/api
 ```
 
+For the admin portal, set a private path such as:
+
+```text
+REACT_APP_ADMIN_PORTAL_PATH=/control-room
+```
+
 ## Local Development
 
 ### Backend
@@ -137,12 +145,13 @@ export DB_NAME="ghanajersey"
 export RESEND_API_KEY="re_xxxxxxxxxxxxxxxxx"
 export RESEND_FROM_EMAIL="Black Star Threads <no-reply@ghanajersey.co>"
 export ADMIN_EMAIL="admin@ghanajersey.co"
+export REACT_APP_ADMIN_PORTAL_PATH="/control-room"
 export R2_PUBLIC_URL="https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com/ghanajersey"
 export S3_BUCKET="ghanajersey"
 export S3_REGION="auto"
 export S3_ENDPOINT_URL="https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com"
-export AWS_ACCESS_KEY_ID="2746d9eb1c15dab98aa23a1c679b6550"
-export AWS_SECRET_ACCESS_KEY="0e06315c109bac57f89c0086843dde91739ced057264270658006ef9db3fae14"
+export AWS_ACCESS_KEY_ID="your-r2-access-key-id"
+export AWS_SECRET_ACCESS_KEY="your-r2-secret-access-key"
 uvicorn server:app --reload --host 0.0.0.0 --port 8000
 ```
 

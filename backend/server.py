@@ -115,6 +115,21 @@ async def notify_admin(subject: str, html: str, text: Optional[str] = None) -> b
 def build_file_url(path: str) -> str:
     return f"/api/files/{path}"
 
+def extract_storage_path(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return value
+    if value.startswith("/api/files/"):
+        return value[len("/api/files/"):]
+    parsed = urlparse(value)
+    if parsed.path.startswith("/api/files/"):
+        return parsed.path[len("/api/files/"):]
+    marker = f"/{APP_NAME}/"
+    if marker in parsed.path:
+        return f"{APP_NAME}/" + parsed.path.split(marker, 1)[1]
+    if value.startswith(f"{APP_NAME}/"):
+        return value
+    return value
+
 def normalize_image_url(image: str) -> str:
     if not image:
         return image
@@ -248,6 +263,115 @@ def get_object(path: str) -> tuple:
         logger.error(f"Failed to retrieve object: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve file") from e
 
+def delete_object(path: str) -> None:
+    """Delete file from S3-compatible object storage."""
+    client = init_storage()
+    if not client or not S3_BUCKET:
+        raise HTTPException(status_code=500, detail="Storage not initialized")
+
+    try:
+        client.delete_object(Bucket=S3_BUCKET, Key=path)
+    except (BotoCoreError, ClientError) as e:
+        logger.error(f"Failed to delete object: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete file") from e
+
+async def send_order_paid_notifications(order_id: str) -> None:
+    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not order:
+        return
+
+    if order.get("order_notifications_sent_at"):
+        return
+
+    customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
+    customer_email = order.get("customer_email")
+    formatted_total = f"{order.get('currency', 'GHS')} {float(order.get('total', 0)):.2f}"
+    payment_method = order.get("payment_method", "payment")
+    items = order.get("items", [])
+
+    if customer_email:
+        await send_resend_email(
+            customer_email,
+            f"Payment confirmed: {order_id}",
+            f"""
+            <div>
+              <h2>Your payment was received</h2>
+              <p>Hi {customer_name},</p>
+              <p>Your payment for order <strong>{order_id}</strong> has been confirmed.</p>
+              <p>Total paid: <strong>{formatted_total}</strong></p>
+              <p>Payment method: {payment_method}</p>
+              <p>We will keep you updated as the vendors process your order.</p>
+            </div>
+            """,
+            text=(
+                f"Hi {customer_name}, your payment for order {order_id} has been confirmed. "
+                f"Total paid: {formatted_total}. Payment method: {payment_method}."
+            ),
+        )
+
+    await notify_admin(
+        f"Payment received: {order_id}",
+        f"""
+        <div>
+          <h2>Payment received</h2>
+          <p>Order <strong>{order_id}</strong> has been paid successfully.</p>
+          <p>Customer: {customer_name} ({customer_email or 'No email'})</p>
+          <p>Total paid: <strong>{formatted_total}</strong></p>
+          <p>Payment method: {payment_method}</p>
+        </div>
+        """,
+        text=(
+            f"Payment received for order {order_id}. Customer: {customer_name} "
+            f"({customer_email or 'No email'}). Total paid: {formatted_total}. "
+            f"Payment method: {payment_method}."
+        ),
+    )
+
+    vendor_ids = list({item["vendor_id"] for item in items if item.get("vendor_id")})
+    if vendor_ids:
+        vendors = await db.users.find(
+            {"user_id": {"$in": vendor_ids}},
+            {"_id": 0, "user_id": 1, "email": 1, "name": 1},
+        ).to_list(len(vendor_ids))
+
+        items_by_vendor: Dict[str, List[Dict[str, Any]]] = {}
+        for item in items:
+            vendor_id = item.get("vendor_id")
+            if vendor_id:
+                items_by_vendor.setdefault(vendor_id, []).append(item)
+
+        for vendor in vendors:
+            vendor_items = items_by_vendor.get(vendor["user_id"], [])
+            if not vendor_items or not vendor.get("email"):
+                continue
+
+            item_lines = "".join(
+                f"<li>{item['name']} x {item['quantity']} ({item['size']})</li>"
+                for item in vendor_items
+            )
+            await send_resend_email(
+                vendor["email"],
+                f"Paid order received: {order_id}",
+                f"""
+                <div>
+                  <h2>Payment confirmed for a new order</h2>
+                  <p>Hi {vendor.get('name') or 'Vendor'},</p>
+                  <p>Order <strong>{order_id}</strong> has been paid and is ready for processing.</p>
+                  <ul>{item_lines}</ul>
+                  <p>Customer: {customer_name}</p>
+                </div>
+                """,
+                text=(
+                    f"Hi {vendor.get('name') or 'Vendor'}, order {order_id} has been paid "
+                    f"and is ready for processing."
+                ),
+            )
+
+    await db.orders.update_one(
+        {"order_id": order_id},
+        {"$set": {"order_notifications_sent_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
 
 async def _mark_transaction_paid(session_id: str):
     transaction = await db.payment_transactions.find_one(
@@ -265,6 +389,8 @@ async def _mark_transaction_paid(session_id: str):
             {"order_id": transaction["order_id"]},
             {"$set": {"payment_status": "paid", "order_status": "processing"}}
         )
+
+        await send_order_paid_notifications(transaction["order_id"])
 
     return transaction
 
@@ -287,6 +413,9 @@ class UserCreate(BaseModel):
     password: str
     name: str
     role: str = "customer"
+
+class DeleteUploadedFileRequest(BaseModel):
+    path: str
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -945,6 +1074,36 @@ async def upload_product_image(
     except Exception as e:
         logger.error(f"Product image upload failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to upload product image: {str(e)}")
+
+@api_router.delete("/upload/file")
+async def delete_uploaded_file(
+    payload: DeleteUploadedFileRequest,
+    user: dict = Depends(get_current_user)
+):
+    if user.get("role") != "vendor":
+        raise HTTPException(status_code=403, detail="Only vendors can delete uploaded images")
+
+    storage_path = extract_storage_path(payload.path)
+    if not storage_path:
+        raise HTTPException(status_code=400, detail="File path is required")
+
+    file_record = await db.uploaded_files.find_one(
+        {"storage_path": storage_path, "user_id": user["user_id"], "is_deleted": False},
+        {"_id": 0}
+    )
+    if not file_record:
+        raise HTTPException(status_code=404, detail="Uploaded image not found")
+
+    delete_object(storage_path)
+    await db.uploaded_files.update_one(
+        {"storage_path": storage_path, "user_id": user["user_id"]},
+        {"$set": {
+            "is_deleted": True,
+            "deleted_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+
+    return {"message": "Image removed successfully"}
 
 # Serve uploaded files
 @api_router.get("/files/{path:path}")
@@ -2184,85 +2343,6 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
     }
     
     await db.orders.insert_one(order_doc)
-
-    customer_name = order_data.shipping_address.full_name or user.get("name") or "Customer"
-    formatted_total = f"{order_doc['currency']} {order_doc['total']:.2f}"
-    vendor_ids = list({item["vendor_id"] for item in items if item.get("vendor_id")})
-
-    await send_resend_email(
-        user["email"],
-        f"Order received: {order_id}",
-        f"""
-        <div>
-          <h2>Thanks for your order</h2>
-          <p>Hi {customer_name},</p>
-          <p>We have received your order <strong>{order_id}</strong>.</p>
-          <p>Total: <strong>{formatted_total}</strong></p>
-          <p>Payment method: {order_doc['payment_method']}</p>
-          <p>We will send another update as your order progresses.</p>
-        </div>
-        """,
-        text=(
-            f"Hi {customer_name}, we have received your order {order_id}. "
-            f"Total: {formatted_total}. Payment method: {order_doc['payment_method']}."
-        ),
-    )
-
-    await notify_admin(
-        f"New order purchased: {order_id}",
-        f"""
-        <div>
-          <h2>New order purchased</h2>
-          <p>Order <strong>{order_id}</strong> has been placed.</p>
-          <p>Customer: {customer_name} ({user['email']})</p>
-          <p>Total: <strong>{formatted_total}</strong></p>
-          <p>Payment method: {order_doc['payment_method']}</p>
-        </div>
-        """,
-        text=(
-            f"New order purchased: {order_id}. Customer: {customer_name} ({user['email']}). "
-            f"Total: {formatted_total}. Payment method: {order_doc['payment_method']}."
-        ),
-    )
-
-    if vendor_ids:
-        vendors = await db.users.find(
-            {"user_id": {"$in": vendor_ids}},
-            {"_id": 0, "user_id": 1, "email": 1, "name": 1},
-        ).to_list(len(vendor_ids))
-
-        items_by_vendor: Dict[str, List[Dict[str, Any]]] = {}
-        for item in items:
-            vendor_id = item.get("vendor_id")
-            if vendor_id:
-                items_by_vendor.setdefault(vendor_id, []).append(item)
-
-        for vendor in vendors:
-            vendor_items = items_by_vendor.get(vendor["user_id"], [])
-            if not vendor_items or not vendor.get("email"):
-                continue
-
-            item_lines = "".join(
-                f"<li>{item['name']} x {item['quantity']} ({item['size']})</li>"
-                for item in vendor_items
-            )
-            await send_resend_email(
-                vendor["email"],
-                f"New order received: {order_id}",
-                f"""
-                <div>
-                  <h2>You received a new order</h2>
-                  <p>Hi {vendor.get('name') or 'Vendor'},</p>
-                  <p>Order <strong>{order_id}</strong> includes the following items from your store:</p>
-                  <ul>{item_lines}</ul>
-                  <p>Customer: {customer_name}</p>
-                </div>
-                """,
-                text=(
-                    f"Hi {vendor.get('name') or 'Vendor'}, you received a new order {order_id} "
-                    f"from {customer_name}."
-                ),
-            )
     
     # Clear cart
     await db.carts.delete_one({"user_id": user["user_id"]})
@@ -2447,15 +2527,19 @@ async def capture_paypal_order(paypal_order_id: str, user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail="Transaction not found")
     
     # Update payment status
+    paid_at = datetime.now(timezone.utc).isoformat()
+
     await db.payment_transactions.update_one(
         {"session_id": paypal_order_id},
-        {"$set": {"payment_status": "paid"}}
+        {"$set": {"payment_status": "paid", "paid_at": paid_at}}
     )
     
     await db.orders.update_one(
         {"order_id": transaction["order_id"]},
-        {"$set": {"payment_status": "paid", "order_status": "processing"}}
+        {"$set": {"payment_status": "paid", "order_status": "processing", "paid_at": paid_at}}
     )
+
+    await send_order_paid_notifications(transaction["order_id"])
     
     return {"status": "COMPLETED"}
 
@@ -2566,6 +2650,7 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
         )
         
         if transaction and transaction["payment_status"] != "paid":
+            paid_at = datetime.now(timezone.utc).isoformat()
             # Update payment transaction
             await db.payment_transactions.update_one(
                 {"$or": [
@@ -2575,7 +2660,7 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
                 {"$set": {
                     "payment_status": "paid",
                     "paystack_transaction_id": result["data"].get("id"),
-                    "paid_at": datetime.now(timezone.utc).isoformat()
+                    "paid_at": paid_at
                 }}
             )
             
@@ -2585,9 +2670,11 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
                 {"$set": {
                     "payment_status": "paid",
                     "order_status": "processing",
-                    "paid_at": datetime.now(timezone.utc).isoformat()
+                    "paid_at": paid_at
                 }}
             )
+
+            await send_order_paid_notifications(transaction["order_id"])
         
         return {
             "status": "success",
@@ -2631,15 +2718,18 @@ async def paystack_webhook(request: Request):
         )
         
         if transaction and transaction["payment_status"] != "paid":
+            paid_at = datetime.now(timezone.utc).isoformat()
             await db.payment_transactions.update_one(
                 {"session_id": reference},
-                {"$set": {"payment_status": "paid"}}
+                {"$set": {"payment_status": "paid", "paid_at": paid_at}}
             )
             
             await db.orders.update_one(
                 {"order_id": transaction["order_id"]},
-                {"$set": {"payment_status": "paid", "order_status": "processing"}}
+                {"$set": {"payment_status": "paid", "order_status": "processing", "paid_at": paid_at}}
             )
+
+            await send_order_paid_notifications(transaction["order_id"])
     
     return {"status": "ok"}
 
