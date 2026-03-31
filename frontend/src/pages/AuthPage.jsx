@@ -12,12 +12,14 @@ import { toast } from "sonner";
 const AuthPage = ({ mode = "vendor" }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register, loginWithGoogle, logout } = useAuth();
+  const { login, register, loginWithGoogle, logout, verifyVendorLogin2FA } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState(null);
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
@@ -59,7 +61,14 @@ const AuthPage = ({ mode = "vendor" }) => {
 
     setLoading(true);
     try {
-      const user = await login(loginEmail, loginPassword);
+      const loginResult = await login(loginEmail, loginPassword);
+      if (loginResult?.requires_2fa) {
+        setTwoFactorChallenge(loginResult);
+        toast.success("Verification code sent to your email");
+        return;
+      }
+
+      const user = loginResult;
       if (isAdminMode && user.role !== "admin") {
         await logout();
         toast.error("This portal is reserved for administrators only");
@@ -75,6 +84,27 @@ const AuthPage = ({ mode = "vendor" }) => {
       navigate(await resolvePostAuthDestination(user));
     } catch (error) {
       toast.error(error.response?.data?.detail || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    if (!twoFactorChallenge?.challenge_id || !verificationCode) {
+      toast.error("Enter the verification code sent to your email");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const user = await verifyVendorLogin2FA(twoFactorChallenge.challenge_id, verificationCode);
+      setTwoFactorChallenge(null);
+      setVerificationCode("");
+      toast.success(`Welcome back, ${user.name}!`);
+      navigate(await resolvePostAuthDestination(user));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Verification failed");
     } finally {
       setLoading(false);
     }
@@ -171,53 +201,106 @@ const AuthPage = ({ mode = "vendor" }) => {
                 <p className="font-body text-sm text-muted-text mt-2">{portalDescription}</p>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Email</Label>
-                  <div className="relative mt-2">
-                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
+              {twoFactorChallenge ? (
+                <form onSubmit={handleVerifyCode} className="space-y-6">
+                  <div className="border border-ashanti-gold/30 bg-ashanti-gold/5 p-4">
+                    <p className="font-body text-sm font-semibold uppercase tracking-wide">Two-Step Verification</p>
+                    <p className="font-body text-sm text-muted-text mt-2">
+                      Enter the 6-digit verification code sent to {twoFactorChallenge.email}.
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Verification Code</Label>
                     <Input
-                      type="email"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="your@email.com"
-                      className="pl-12 rounded-none border-black/20 focus:border-black py-6"
-                      data-testid="login-email"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="123456"
+                      className="mt-2 rounded-none border-black/20 focus:border-black py-6 tracking-[0.4em] text-center text-lg"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
-                  <div className="relative mt-2">
-                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="pl-12 pr-12 rounded-none border-black/20 focus:border-black py-6"
-                      data-testid="login-password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-text"
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
+                  >
+                    {loading ? "Verifying..." : "Verify and Continue"}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-black py-6 font-body uppercase tracking-widest"
+                    onClick={() => {
+                      setTwoFactorChallenge(null);
+                      setVerificationCode("");
+                    }}
+                  >
+                    Back to Sign In
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Email</Label>
+                    <div className="relative mt-2">
+                      <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
+                      <Input
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className="pl-12 rounded-none border-black/20 focus:border-black py-6"
+                        data-testid="login-email"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
-                  data-testid="login-submit"
-                >
-                  {loading ? "Signing in..." : "Sign In"}
-                </Button>
-              </form>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
+                    <div className="relative mt-2">
+                      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="pl-12 pr-12 rounded-none border-black/20 focus:border-black py-6"
+                        data-testid="login-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-text"
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {!isAdminMode && (
+                    <div className="border border-black/10 bg-black/[0.02] p-4">
+                      <p className="font-body text-sm font-semibold uppercase tracking-wide">Vendor Security</p>
+                      <p className="font-body text-sm text-muted-text mt-2">
+                        Every vendor sign-in requires a one-time code sent to the account email.
+                      </p>
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
+                    data-testid="login-submit"
+                  >
+                    {loading ? "Signing in..." : "Sign In"}
+                  </Button>
+                </form>
+              )}
 
               {!isAdminMode && (
                 <>

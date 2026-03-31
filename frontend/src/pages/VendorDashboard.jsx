@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { 
   Package, Plus, Edit2, Trash2, Eye, Clock, CheckCircle, XCircle, 
   ShoppingBag, DollarSign, TrendingUp, AlertTriangle, Copy, Pause, Play,
-  Truck, CreditCard, HelpCircle, FileText, MessageSquare, Percent, ThumbsUp
+  Truck, CreditCard, HelpCircle, FileText, MessageSquare, Percent, ThumbsUp, X
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -31,6 +31,7 @@ const VendorDashboard = () => {
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [uploadingImageIndex, setUploadingImageIndex] = useState(null);
+  const [dismissedNotifications, setDismissedNotifications] = useState([]);
 
   // Product form state
   const [productForm, setProductForm] = useState({
@@ -72,6 +73,12 @@ const VendorDashboard = () => {
   useEffect(() => {
     checkVendorStatusAndFetch();
   }, [token]);
+
+  useEffect(() => {
+    if (!user?.user_id) return;
+    const stored = JSON.parse(localStorage.getItem(`vendor_notifications_closed_${user.user_id}`) || "[]");
+    setDismissedNotifications(Array.isArray(stored) ? stored : []);
+  }, [user?.user_id]);
 
   const checkVendorStatusAndFetch = async () => {
     if (!token) return;
@@ -410,6 +417,7 @@ const VendorDashboard = () => {
 
   const productNotifications = [...products]
     .filter((product) => ["approved", "rejected"].includes(product.status))
+    .filter((product) => !dismissedNotifications.includes(product.product_id))
     .sort((a, b) => new Date(b.reviewed_at || b.created_at || 0) - new Date(a.reviewed_at || a.created_at || 0))
     .slice(0, 6);
 
@@ -418,6 +426,23 @@ const VendorDashboard = () => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "Recently";
     return date.toLocaleString();
+  };
+
+  const dismissNotification = (productId) => {
+    if (!user?.user_id) return;
+    const nextDismissed = [...new Set([...dismissedNotifications, productId])];
+    setDismissedNotifications(nextDismissed);
+    localStorage.setItem(`vendor_notifications_closed_${user.user_id}`, JSON.stringify(nextDismissed));
+  };
+
+  const formatCurrencyBreakdown = (breakdown, fallbackValue, fallbackCurrency = "USD") => {
+    if (breakdown && Object.keys(breakdown).length > 0) {
+      return Object.entries(breakdown)
+        .sort(([currencyA], [currencyB]) => currencyA.localeCompare(currencyB))
+        .map(([currency, amount]) => `${currency} ${Number(amount || 0).toFixed(2)}`)
+        .join(" • ");
+    }
+    return `${fallbackCurrency} ${Number(fallbackValue || 0).toFixed(2)}`;
   };
 
   if (loading) {
@@ -733,9 +758,19 @@ const VendorDashboard = () => {
                         : "This product was reviewed and is currently rejected."}
                     </p>
                   </div>
-                  <div className="text-right">
-                    {getStatusBadge(product.status)}
-                    <p className="font-body text-xs text-muted-text mt-2">{formatNotificationTime(product.reviewed_at || product.created_at)}</p>
+                  <div className="text-right flex items-start gap-3">
+                    <div>
+                      {getStatusBadge(product.status)}
+                      <p className="font-body text-xs text-muted-text mt-2">{formatNotificationTime(product.reviewed_at || product.created_at)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => dismissNotification(product.product_id)}
+                      className="text-muted-text hover:text-black"
+                      aria-label={`Dismiss notification for ${product.name}`}
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -750,35 +785,35 @@ const VendorDashboard = () => {
               <DollarSign size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Total Revenue</span>
             </div>
-            <span className="font-body text-2xl font-medium">${dashboard?.total_revenue?.toFixed(2) || "0.00"}</span>
+            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.revenue_breakdown, dashboard?.total_revenue)}</span>
           </div>
           <div className="bg-ashanti-gold/10 border border-ashanti-gold/30 p-5">
             <div className="flex items-center gap-2 text-ashanti-gold mb-2">
               <Percent size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Platform Fee (15%)</span>
             </div>
-            <span className="font-body text-2xl font-medium">${dashboard?.platform_commission?.toFixed(2) || "0.00"}</span>
+            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.platform_commission_breakdown, dashboard?.platform_commission)}</span>
           </div>
           <div className="bg-ghana-green/10 border border-ghana-green/30 p-5">
             <div className="flex items-center gap-2 text-ghana-green mb-2">
               <CreditCard size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Net Earnings</span>
             </div>
-            <span className="font-body text-2xl font-medium text-ghana-green">${dashboard?.net_earnings?.toFixed(2) || "0.00"}</span>
+            <span className="font-body text-2xl font-medium text-ghana-green">{formatCurrencyBreakdown(dashboard?.net_earnings_breakdown, dashboard?.net_earnings)}</span>
           </div>
           <div className="bg-white border border-black/10 p-5">
             <div className="flex items-center gap-2 text-muted-text mb-2">
               <Clock size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Pending Payout</span>
             </div>
-            <span className="font-body text-2xl font-medium">${dashboard?.pending_payout?.toFixed(2) || "0.00"}</span>
+            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.pending_payout_breakdown, dashboard?.pending_payout)}</span>
           </div>
           <div className="bg-white border border-black/10 p-5">
             <div className="flex items-center gap-2 text-muted-text mb-2">
               <CheckCircle size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Paid Out</span>
             </div>
-            <span className="font-body text-2xl font-medium">${dashboard?.paid_payout?.toFixed(2) || "0.00"}</span>
+            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.paid_payout_breakdown, dashboard?.paid_payout)}</span>
           </div>
         </div>
 
@@ -802,7 +837,7 @@ const VendorDashboard = () => {
           </div>
           <div className="bg-white p-4 border border-black/10 text-center">
             <p className="font-body text-xs text-muted-text uppercase">Monthly Sales</p>
-            <p className="font-body text-xl font-medium">${dashboard?.monthly_revenue?.toFixed(2) || "0.00"}</p>
+            <p className="font-body text-xl font-medium">{formatCurrencyBreakdown(dashboard?.monthly_revenue_breakdown, dashboard?.monthly_revenue)}</p>
           </div>
           <div className="bg-white p-4 border border-black/10 text-center">
             <p className="font-body text-xs text-muted-text uppercase">Total Votes</p>
@@ -941,7 +976,7 @@ const VendorDashboard = () => {
                             Size: {item.size} | Qty: {item.quantity}
                           </p>
                         </div>
-                        <p className="font-body text-sm font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+                        <p className="font-body text-sm font-medium">{`${item.currency || order.currency || "USD"} ${(item.price * item.quantity).toFixed(2)}`}</p>
                       </div>
                     ))}
                   </div>
@@ -951,7 +986,7 @@ const VendorDashboard = () => {
                       Payment: <span className={order.payment_status === 'paid' ? 'text-ghana-green' : 'text-ashanti-gold'}>{order.payment_status}</span>
                     </p>
                     <p className="font-body text-lg font-semibold">
-                      Total: ${order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
+                      Total: {(order.currency || "USD")} {order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -993,8 +1028,9 @@ const VendorDashboard = () => {
                         <p className="font-body text-[11px] text-muted-text mt-1">Product ID: {product.product_id}</p>
                         {getStatusBadge(product.status)}
                       </div>
-                      <span className="font-body text-lg font-semibold">${product.price}</span>
+                      <span className="font-body text-lg font-semibold">USD {Number(product.price || 0).toFixed(2)}</span>
                     </div>
+                    <p className="font-body text-xs text-muted-text mb-2">GHS {Number(product.price_ghs || 0).toFixed(2)}</p>
                     <p className="font-body text-xs text-muted-text mb-3">
                       Stock: {product.stock} | Votes: {product.vote_count || 0}
                     </p>
@@ -1054,7 +1090,7 @@ const VendorDashboard = () => {
                           <p className="font-body text-sm font-medium truncate">{product.name}</p>
                           <p className="font-body text-xs text-muted-text">{product.total_sold} sold</p>
                         </div>
-                        <p className="font-body text-sm font-semibold text-ghana-green">${product.total_revenue?.toFixed(2)}</p>
+                        <p className="font-body text-sm font-semibold text-ghana-green">{formatCurrencyBreakdown(product.revenue_breakdown, product.total_revenue)}</p>
                       </div>
                     ))}
                   </div>

@@ -22,7 +22,7 @@ const VendorOnboarding = () => {
   const [loading, setLoading] = useState(false);
   const [vendorStatus, setVendorStatus] = useState(null);
 
-  const totalSteps = 9;
+  const totalSteps = 10;
 
   // Form state for all steps
   const [formData, setFormData] = useState({
@@ -76,7 +76,17 @@ const VendorOnboarding = () => {
       fulfill_through_platform: false,
       agree_terms: false
     },
-    // Step 8: Verification
+    // Step 8: Payout
+    payout: {
+      payout_method: "",
+      momo_number: "",
+      momo_network: "",
+      bank_name: "",
+      account_name: "",
+      account_number: "",
+      bank_branch: ""
+    },
+    // Step 9: Verification
     verification: {
       jersey_photos: ["", ""],
       packaging_photo: ""
@@ -230,12 +240,26 @@ const VendorOnboarding = () => {
         }
         break;
       case 8:
+        if (!formData.payout.payout_method) {
+          toast.error("Please choose how you want to receive payouts");
+          return false;
+        }
+        if (formData.payout.payout_method === "momo" && (!formData.payout.momo_number || !formData.payout.momo_network)) {
+          toast.error("Please provide your MoMo network and number");
+          return false;
+        }
+        if (formData.payout.payout_method === "bank" && (!formData.payout.bank_name || !formData.payout.account_name || !formData.payout.account_number)) {
+          toast.error("Please provide your bank payout details");
+          return false;
+        }
+        break;
+      case 9:
         if (!formData.commitment.agree_terms) {
           toast.error("Please agree to the terms and conditions");
           return false;
         }
         break;
-      case 9:
+      case 10:
         const validPhotos = formData.verification.jersey_photos.filter(p => p.trim() !== "");
         if (validPhotos.length < 2) {
           toast.error("Please upload at least 2 jersey photos");
@@ -281,8 +305,9 @@ const VendorOnboarding = () => {
     { num: 5, title: "Delivery", icon: Truck },
     { num: 6, title: "Quality", icon: Shield },
     { num: 7, title: "Commitment", icon: FileCheck },
-    { num: 8, title: "Agreement", icon: FileCheck },
-    { num: 9, title: "Verification", icon: Camera }
+    { num: 8, title: "Payout", icon: MessageCircle },
+    { num: 9, title: "Agreement", icon: FileCheck },
+    { num: 10, title: "Verification", icon: Camera }
   ];
 
   // Show pending approval screen
@@ -877,8 +902,113 @@ const VendorOnboarding = () => {
             </div>
           )}
 
-          {/* Step 8: Agreement */}
+          {/* Step 8: Payout Details */}
           {currentStep === 8 && (
+            <div className="space-y-6">
+              <h2 className="font-heading text-xl mb-6">Payout Details</h2>
+              <p className="font-body text-sm text-muted-text">
+                Tell us where we should send your vendor payouts after orders are completed and confirmed.
+              </p>
+
+              <div>
+                <Label className="font-body text-sm uppercase tracking-wider mb-3 block">Preferred Payout Method *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { id: "momo", label: "Mobile Money", description: "MTN MoMo, AirtelTigo Money, or VodaCash" },
+                    { id: "bank", label: "Bank Transfer", description: "Receive payouts into your bank account" }
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => updateFormData("payout", "payout_method", option.id)}
+                      className={`text-left border p-4 transition-all ${
+                        formData.payout.payout_method === option.id
+                          ? "border-ashanti-gold bg-ashanti-gold/10"
+                          : "border-black/10 hover:border-black/30"
+                      }`}
+                    >
+                      <p className="font-body text-sm font-semibold uppercase tracking-wide">{option.label}</p>
+                      <p className="font-body text-xs text-muted-text mt-1">{option.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {formData.payout.payout_method === "momo" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">MoMo Network *</Label>
+                    <Select
+                      value={formData.payout.momo_network}
+                      onValueChange={(value) => updateFormData("payout", "momo_network", value)}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="Select network" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mtn_momo">MTN MoMo</SelectItem>
+                        <SelectItem value="airteltigo_money">AirtelTigo Money</SelectItem>
+                        <SelectItem value="vodacash">VodaCash</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">MoMo Number *</Label>
+                    <Input
+                      value={formData.payout.momo_number}
+                      onChange={(e) => updateFormData("payout", "momo_number", e.target.value)}
+                      placeholder="+233 XX XXX XXXX"
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formData.payout.payout_method === "bank" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Bank Name *</Label>
+                    <Input
+                      value={formData.payout.bank_name}
+                      onChange={(e) => updateFormData("payout", "bank_name", e.target.value)}
+                      placeholder="GCB Bank"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Account Name *</Label>
+                    <Input
+                      value={formData.payout.account_name}
+                      onChange={(e) => updateFormData("payout", "account_name", e.target.value)}
+                      placeholder="Kwame Mensah"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Account Number *</Label>
+                    <Input
+                      value={formData.payout.account_number}
+                      onChange={(e) => updateFormData("payout", "account_number", e.target.value)}
+                      placeholder="0123456789"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Bank Branch</Label>
+                    <Input
+                      value={formData.payout.bank_branch}
+                      onChange={(e) => updateFormData("payout", "bank_branch", e.target.value)}
+                      placeholder="Accra Main"
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 9: Agreement */}
+          {currentStep === 9 && (
             <div className="space-y-6">
               <h2 className="font-heading text-xl mb-6">Terms & Agreement</h2>
 
@@ -914,8 +1044,8 @@ const VendorOnboarding = () => {
             </div>
           )}
 
-          {/* Step 9: Vendor Verification */}
-          {currentStep === 9 && (
+          {/* Step 10: Vendor Verification */}
+          {currentStep === 10 && (
             <div className="space-y-6">
               <h2 className="font-heading text-xl mb-6">Vendor Verification</h2>
               <p className="font-body text-sm text-muted-text mb-6">

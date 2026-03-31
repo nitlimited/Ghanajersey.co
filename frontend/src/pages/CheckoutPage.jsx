@@ -44,15 +44,25 @@ const CheckoutPage = () => {
   };
 
   const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
+  const qualifiesForInternationalFreeShipping = !isGhana && subtotal >= 200;
   
   // Shipping costs in respective currencies
   const shippingCost = isGhana 
     ? (shippingAddress.country === "Ghana" ? 50 : 250)  // GHS rates
-    : (shippingAddress.country === "Ghana" ? 5 : 15);   // USD rates
+    : (shippingAddress.country === "Ghana" ? 5 : qualifiesForInternationalFreeShipping ? 0 : 15);   // USD rates
   
   const total = subtotal + shippingCost;
   const currency = getCurrencyCode();
   const formatLocalizedAmount = (amount) => formatPrice(amount, isGhana ? amount : null);
+  const paymentBrands = [
+    "Amazon Pay", "American Express", "Apple Pay", "Discover", "Mastercard", "Visa",
+    "MTN MoMo", "AirtelTigo Money", "VodaCash"
+  ];
+  const shippingWindows = [
+    { country: "United States", timeline: "3-5 Days" },
+    { country: "Canada & Mexico", timeline: "7-14 Days" },
+    { country: "Rest of the world", timeline: "+14 Days" }
+  ];
 
   const countries = [
     "Ghana", "United States", "United Kingdom", "Germany", "France", 
@@ -423,6 +433,41 @@ const CheckoutPage = () => {
                     )}
                   </p>
                 </div>
+
+                <div className="mt-6">
+                  <h3 className="font-heading text-sm tracking-widest uppercase mb-3">Accepted Payments</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {paymentBrands.map((brand) => (
+                      <div key={brand} className="border border-black/10 px-3 py-3 text-center bg-bone-white">
+                        <span className="font-body text-xs uppercase tracking-[0.18em]">{brand}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-8 border border-black/10">
+                <div className="flex items-center gap-3 mb-6">
+                  <Truck size={24} />
+                  <h2 className="font-heading text-lg tracking-widest uppercase">Shipping Policy</h2>
+                </div>
+
+                <div className="space-y-5 font-body text-sm text-muted-text">
+                  <p>International shipping is managed by <strong className="text-black">ghanajersey.co</strong>. Local shipping inside Ghana is managed by <strong className="text-black">local vendors</strong>.</p>
+                  <p>Once your order has been shipped, a shipping confirmation email is sent with your order details and tracking information.</p>
+                  <p>After payment is verified, we process and ship orders within 2 business days, excluding weekends and holidays. Pre-ordered items take 4-6 weeks to ship from the date the pre-order is placed.</p>
+                  <p>Express shipping options are also available at checkout. Customs fees are the responsibility of the customer.</p>
+                  <p className="font-semibold text-black">Free shipping on orders over $200.</p>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {shippingWindows.map((window) => (
+                    <div key={window.country} className="border border-black/10 p-4 bg-bone-white">
+                      <p className="font-body text-xs uppercase tracking-widest text-muted-text">{window.country}</p>
+                      <p className="font-heading text-lg mt-2">{window.timeline}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -456,6 +501,12 @@ const CheckoutPage = () => {
                     <span className="text-muted-text">Shipping {shippingAddress.country === "Ghana" ? "(Local)" : "(International)"}</span>
                     <span>{formatLocalizedAmount(shippingCost)}</span>
                   </div>
+                  {qualifiesForInternationalFreeShipping && !isGhana && (
+                    <div className="flex justify-between font-body text-sm text-ghana-green">
+                      <span>Free shipping applied</span>
+                      <span>Orders over $200</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-black/10 pt-4 mt-4 mb-6">

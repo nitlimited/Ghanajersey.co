@@ -107,6 +107,22 @@ const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const response = await axios.post(`${API}/auth/login`, { email, password });
+    if (response.data.requires_2fa) {
+      return response.data;
+    }
+
+    const { token: newToken, user: userData } = response.data;
+    localStorage.setItem("auth_token", newToken);
+    setToken(newToken);
+    setUser(userData);
+    return userData;
+  };
+
+  const verifyVendorLogin2FA = async (challengeId, code) => {
+    const response = await axios.post(`${API}/auth/login/verify-2fa`, {
+      challenge_id: challengeId,
+      code
+    });
     const { token: newToken, user: userData } = response.data;
     localStorage.setItem("auth_token", newToken);
     setToken(newToken);
@@ -150,7 +166,7 @@ const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout, setAuthData, checkAuth }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout, setAuthData, checkAuth, verifyVendorLogin2FA }}>
       {children}
     </AuthContext.Provider>
   );
