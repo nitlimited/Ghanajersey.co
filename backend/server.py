@@ -22,6 +22,7 @@ import hashlib
 import requests
 import boto3
 import stripe
+import secrets
 from urllib.parse import urlparse, urlunparse
 from xml.sax.saxutils import escape as xml_escape
 
@@ -186,6 +187,36 @@ def normalize_image_url(image: str) -> str:
 def normalize_product_document(product: dict) -> dict:
     product["images"] = [normalize_image_url(image) for image in product.get("images", []) if image]
     return product
+
+def add_currency_amount(target: Dict[str, float], currency: Optional[str], amount: float) -> None:
+    normalized_currency = (currency or "USD").upper()
+    target[normalized_currency] = round(target.get(normalized_currency, 0) + float(amount or 0), 2)
+
+def commission_breakdown(source: Dict[str, float], rate: float) -> Dict[str, float]:
+    return {
+        currency: round(amount * rate, 2)
+        for currency, amount in source.items()
+    }
+
+def format_money_breakdown(source: Dict[str, float]) -> str:
+    if not source:
+        return "USD 0.00"
+    return " • ".join(f"{currency} {amount:.2f}" for currency, amount in sorted(source.items()))
+
+def build_login_code() -> str:
+    return f"{secrets.randbelow(900000) + 100000}"
+
+def build_vendor_login_email(name: str, code: str) -> str:
+    return f"""
+    <div>
+      <h2>Vendor sign-in verification</h2>
+      <p>Hi {name},</p>
+      <p>Use this verification code to complete your vendor sign-in:</p>
+      <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">{code}</p>
+      <p>This code expires in 10 minutes.</p>
+      <p>If you did not request this sign-in, you can safely ignore this email.</p>
+    </div>
+    """
 
 def init_storage():
     """Initialize S3-compatible storage client once and reuse it."""
@@ -758,6 +789,15 @@ class VendorCommitment(BaseModel):
     fulfill_through_platform: bool = False
     agree_terms: bool = False
 
+class VendorPayout(BaseModel):
+    payout_method: str  # momo, bank
+    momo_number: Optional[str] = None
+    momo_network: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_name: Optional[str] = None
+    account_number: Optional[str] = None
+    bank_branch: Optional[str] = None
+
 class VendorVerification(BaseModel):
     jersey_photos: List[str] = []  # URLs of uploaded photos
     packaging_photo: Optional[str] = None
@@ -770,7 +810,12 @@ class VendorOnboardingSubmit(BaseModel):
     delivery: DeliveryCapability
     quality: QualityInfo
     commitment: VendorCommitment
+    payout: VendorPayout
     verification: VendorVerification
+
+class LoginVerify2FA(BaseModel):
+    challenge_id: str
+    code: str
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -922,9 +967,91 @@ async def login(credentials: UserLogin):
     
     if not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
+
+    if user["role"] == "vendor":
+        if not RESEND_API_KEY:
+            raise HTTPException(status_code=503, detail="Vendor two-step verification is not configured")
+
+        challenge_id = f"challenge_{uuid.uuid4().hex[:16]}"
+        code = build_login_code()
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        await db.login_challenges.insert_one({
+            "challenge_id": challenge_id,
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "code": hash_password(code),
+            "expires_at": expires_at.isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "verified": False
+        })
+
+        email_sent = await send_resend_email(
+            user["email"],
+            "Your vendor verification code",
+            build_vendor_login_email(user.get("name", "Vendor"), code),
+            text=f"Your vendor verification code is {code}. It expires in 10 minutes."
+        )
+        if not email_sent:
+            raise HTTPException(status_code=503, detail="Could not send verification code. Please try again.")
+
+        return {
+            "requires_2fa": True,
+            "challenge_id": challenge_id,
+            "email": user["email"],
+            "user": {
+                "user_id": user["user_id"],
+                "email": user["email"],
+                "name": user["name"],
+                "role": user["role"],
+                "picture": user.get("picture")
+            }
+        }
+
     token = create_jwt_token(user["user_id"], user["role"])
     
+    return {
+        "token": token,
+        "user": {
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "picture": user.get("picture")
+        }
+    }
+
+@api_router.post("/auth/login/verify-2fa")
+async def verify_login_2fa(payload: LoginVerify2FA):
+    challenge = await db.login_challenges.find_one({"challenge_id": payload.challenge_id}, {"_id": 0})
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Verification session not found")
+
+    if challenge.get("verified"):
+        raise HTTPException(status_code=400, detail="Verification code already used")
+
+    expires_at = challenge.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Verification code expired")
+
+    if not verify_password(payload.code, challenge["code"]):
+        raise HTTPException(status_code=401, detail="Invalid verification code")
+
+    user = await db.users.find_one({"user_id": challenge["user_id"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.login_challenges.update_one(
+        {"challenge_id": payload.challenge_id},
+        {"$set": {"verified": True, "verified_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    token = create_jwt_token(user["user_id"], user["role"])
+
     return {
         "token": token,
         "user": {
@@ -1097,6 +1224,7 @@ async def submit_vendor_onboarding(data: VendorOnboardingSubmit, user: dict = De
         "delivery": data.delivery.model_dump(),
         "quality": data.quality.model_dump(),
         "commitment": data.commitment.model_dump(),
+        "payout": data.payout.model_dump(),
         "verification": data.verification.model_dump(),
         "submitted_at": datetime.now(timezone.utc).isoformat()
     }
@@ -1106,7 +1234,8 @@ async def submit_vendor_onboarding(data: VendorOnboardingSubmit, user: dict = De
         "brand_name": data.identity.business_name,
         "phone": data.identity.phone_number,
         "location": data.identity.city_location,
-        "social_handles": data.identity.social_handles
+        "social_handles": data.identity.social_handles,
+        "payout_details": data.payout.model_dump()
     }
     
     await db.users.update_one(
@@ -1371,6 +1500,33 @@ async def update_vendor_order_status(order_id: str, status: str, user: dict = De
         }
     )
 
+    if status == "shipped":
+        customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
+        tracking_number = order.get("tracking_number")
+        tracking_message = f"Tracking number: <strong>{tracking_number}</strong>" if tracking_number else "Tracking information will be shared as soon as it is available."
+        item_summary = "".join(
+            f"<li>{item.get('name', 'Jersey')} x{item.get('quantity', 1)}</li>"
+            for item in vendor_items
+        )
+        await send_resend_email(
+            order.get("customer_email"),
+            f"Your GhanaJersey.co order {order_id} has shipped",
+            f"""
+            <div>
+              <h2>Your order is on the way</h2>
+              <p>Hi {customer_name},</p>
+              <p>Your order <strong>{order_id}</strong> has been shipped by {user.get('name', 'your vendor')}.</p>
+              <p>Order details:</p>
+              <ul>{item_summary}</ul>
+              <p>{tracking_message}</p>
+            </div>
+            """,
+            text=(
+                f"Hi {customer_name}, your order {order_id} has been shipped by {user.get('name', 'your vendor')}. "
+                f"{'Tracking number: ' + tracking_number if tracking_number else 'Tracking information will follow soon.'}"
+            ),
+        )
+
     if status == "delivered":
         await notify_admin(
             f"Vendor marked order delivered: {order_id}",
@@ -1508,6 +1664,8 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
     vendor_orders = []
     total_revenue = 0
     monthly_revenue = 0
+    revenue_breakdown = {}
+    monthly_revenue_breakdown = {}
     current_month = datetime.now(timezone.utc).month
     
     for order in all_orders:
@@ -1520,16 +1678,21 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
             
             if order.get("payment_status") == "paid":
                 order_total = sum(item.get("price", 0) * item.get("quantity", 1) for item in vendor_items)
+                order_currency = (order.get("currency") or "USD").upper()
                 total_revenue += order_total
+                add_currency_amount(revenue_breakdown, order_currency, order_total)
                 
                 # Check if order is from current month
                 order_date = order_copy['created_at']
                 if hasattr(order_date, 'month') and order_date.month == current_month:
                     monthly_revenue += order_total
+                    add_currency_amount(monthly_revenue_breakdown, order_currency, order_total)
     
     # Calculate earnings
     platform_commission = total_revenue * 0.15
     net_earnings = total_revenue * 0.85
+    platform_commission_breakdown = commission_breakdown(revenue_breakdown, 0.15)
+    net_earnings_breakdown = commission_breakdown(revenue_breakdown, 0.85)
     
     # Calculate payouts
     confirmed_orders = [o for o in vendor_orders if o.get("delivery_confirmed") and o.get("payment_status") == "paid"]
@@ -1543,6 +1706,20 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
         sum(item.get("price", 0) * item.get("quantity", 1) for item in o.get("items", [])) * 0.85
         for o in pending_orders
     )
+    paid_payout_breakdown = {}
+    pending_payout_breakdown = {}
+    for payout_order in confirmed_orders:
+        add_currency_amount(
+            paid_payout_breakdown,
+            payout_order.get("currency"),
+            sum(item.get("price", 0) * item.get("quantity", 1) for item in payout_order.get("items", [])) * 0.85
+        )
+    for payout_order in pending_orders:
+        add_currency_amount(
+            pending_payout_breakdown,
+            payout_order.get("currency"),
+            sum(item.get("price", 0) * item.get("quantity", 1) for item in payout_order.get("items", [])) * 0.85
+        )
     
     # Get low stock products (5 or fewer items)
     low_stock_products = [p for p in products if p.get("stock", 0) <= 5 and p.get("status") == "approved"]
@@ -1555,9 +1732,14 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
                 pid = item.get("product_id")
                 if pid:
                     if pid not in product_sales:
-                        product_sales[pid] = {"quantity": 0, "revenue": 0}
+                        product_sales[pid] = {"quantity": 0, "revenue": 0, "revenue_breakdown": {}}
                     product_sales[pid]["quantity"] += item.get("quantity", 1)
                     product_sales[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 1)
+                    add_currency_amount(
+                        product_sales[pid]["revenue_breakdown"],
+                        order.get("currency"),
+                        item.get("price", 0) * item.get("quantity", 1)
+                    )
     
     top_sellers = []
     for product in products:
@@ -1565,7 +1747,8 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
             top_sellers.append({
                 **product,
                 "total_sold": product_sales[product["product_id"]]["quantity"],
-                "total_revenue": product_sales[product["product_id"]]["revenue"]
+                "total_revenue": product_sales[product["product_id"]]["revenue"],
+                "revenue_breakdown": product_sales[product["product_id"]]["revenue_breakdown"]
             })
     top_sellers.sort(key=lambda x: x["total_sold"], reverse=True)
     
@@ -1585,11 +1768,17 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
         "total_orders": len(vendor_orders),
         "new_orders": len([o for o in vendor_orders if o.get("order_status") == "processing"]),
         "total_revenue": round(total_revenue, 2),
+        "revenue_breakdown": revenue_breakdown,
         "monthly_revenue": round(monthly_revenue, 2),
+        "monthly_revenue_breakdown": monthly_revenue_breakdown,
         "platform_commission": round(platform_commission, 2),
+        "platform_commission_breakdown": platform_commission_breakdown,
         "net_earnings": round(net_earnings, 2),
+        "net_earnings_breakdown": net_earnings_breakdown,
         "pending_payout": round(pending_payout, 2),
+        "pending_payout_breakdown": pending_payout_breakdown,
         "paid_payout": round(paid_payout, 2),
+        "paid_payout_breakdown": paid_payout_breakdown,
         "low_stock_products": low_stock_products,
         "top_sellers": top_sellers[:5],
         "total_votes": sum(p.get("vote_count", 0) for p in products)
@@ -2986,8 +3175,13 @@ async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
     # Calculate revenue with 15% platform commission
     paid_orders = await db.orders.find({"payment_status": "paid"}, {"_id": 0}).to_list(1000)
     total_revenue = sum(order.get("total", 0) for order in paid_orders)
+    revenue_breakdown = {}
+    for order in paid_orders:
+        add_currency_amount(revenue_breakdown, order.get("currency"), order.get("total", 0))
     platform_commission = total_revenue * 0.15
     vendor_earnings_total = total_revenue * 0.85
+    platform_commission_breakdown = commission_breakdown(revenue_breakdown, 0.15)
+    vendor_earnings_breakdown = commission_breakdown(revenue_breakdown, 0.85)
     
     # Get confirmed deliveries count
     confirmed_deliveries = await db.orders.count_documents({"delivery_confirmed": True})
@@ -3006,8 +3200,11 @@ async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
         "total_vendors": total_vendors,
         "total_customers": total_customers,
         "total_revenue": round(total_revenue, 2),
+        "revenue_breakdown": revenue_breakdown,
         "platform_commission": round(platform_commission, 2),
+        "platform_commission_breakdown": platform_commission_breakdown,
         "vendor_earnings_total": round(vendor_earnings_total, 2),
+        "vendor_earnings_breakdown": vendor_earnings_breakdown,
         "confirmed_deliveries": confirmed_deliveries,
         "pending_confirmations": pending_confirmations,
         "recent_orders": recent_orders
@@ -3031,16 +3228,20 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
         all_orders = await db.orders.find({"payment_status": "paid"}, {"_id": 0}).to_list(1000)
         
         vendor_revenue = 0
+        revenue_breakdown = {}
         for order in all_orders:
             for item in order.get("items", []):
                 if item.get("product_id") in product_ids:
                     item_total = item.get("price", 0) * item.get("quantity", 1)
                     vendor_revenue += item_total
+                    add_currency_amount(revenue_breakdown, order.get("currency"), item_total)
                     if order not in vendor_orders:
                         vendor_orders.append(order)
         
         platform_commission = vendor_revenue * 0.15
         net_earnings = vendor_revenue * 0.85
+        platform_commission_breakdown = commission_breakdown(revenue_breakdown, 0.15)
+        net_earnings_breakdown = commission_breakdown(revenue_breakdown, 0.85)
         
         # Get confirmed deliveries for this vendor
         confirmed_orders = [o for o in vendor_orders if o.get("delivery_confirmed")]
@@ -3056,6 +3257,24 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
                 if item.get("product_id") in product_ids) * 0.85
             for o in confirmed_orders
         )
+        pending_payout_breakdown = {}
+        paid_payout_breakdown = {}
+        for payout_order in vendor_orders:
+            if payout_order.get("delivery_confirmed"):
+                continue
+            payout_total = sum(
+                item.get("price", 0) * item.get("quantity", 1)
+                for item in payout_order.get("items", [])
+                if item.get("product_id") in product_ids
+            ) * 0.85
+            add_currency_amount(pending_payout_breakdown, payout_order.get("currency"), payout_total)
+        for payout_order in confirmed_orders:
+            payout_total = sum(
+                item.get("price", 0) * item.get("quantity", 1)
+                for item in payout_order.get("items", [])
+                if item.get("product_id") in product_ids
+            ) * 0.85
+            add_currency_amount(paid_payout_breakdown, payout_order.get("currency"), payout_total)
         
         # Get vote counts for vendor's products
         total_votes = sum(p.get("vote_count", 0) for p in products)
@@ -3071,10 +3290,15 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
             "pending_products": len([p for p in products if p.get("status") == "pending"]),
             "total_orders": len(vendor_orders),
             "total_revenue": round(vendor_revenue, 2),
+            "revenue_breakdown": revenue_breakdown,
             "platform_commission": round(platform_commission, 2),
+            "platform_commission_breakdown": platform_commission_breakdown,
             "net_earnings": round(net_earnings, 2),
+            "net_earnings_breakdown": net_earnings_breakdown,
             "pending_payout": round(pending_payout, 2),
+            "pending_payout_breakdown": pending_payout_breakdown,
             "paid_payout": round(paid_payout, 2),
+            "paid_payout_breakdown": paid_payout_breakdown,
             "total_votes": total_votes,
             "created_at": vendor.get("created_at"),
             "is_active": vendor.get("is_active", True)
@@ -3590,6 +3814,8 @@ async def startup_event():
     await db.blogs.create_index("is_published")
     await db.orders.create_index("order_id", unique=True)
     await db.orders.create_index("customer_id")
+    await db.login_challenges.create_index("challenge_id", unique=True)
+    await db.login_challenges.create_index("expires_at")
     
     logger.info("Database indexes created")
 
