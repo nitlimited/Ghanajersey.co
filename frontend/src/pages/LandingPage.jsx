@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { useAuth, useCart, API, ADMIN_PORTAL_PATH } from "../App";
 import { useLocalization, LanguageSelector } from "../localization";
 import axios from "axios";
+import SEO from "../components/SEO";
 
 // Announcement Bar Component
 const AnnouncementBar = ({ isSticky = false }) => {
@@ -238,6 +239,9 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
               <Link to="/products?category=creative-designer" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
                 {t('nav.designers')}
               </Link>
+              <Link to="/blog" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`}>
+                Blog
+              </Link>
             </nav>
 
             {/* Center - Logo */}
@@ -324,6 +328,9 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
               </Link>
               <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.designers')}
+              </Link>
+              <Link to="/blog" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+                Blog
               </Link>
               <div className="border-t border-black/10 mt-2 pt-2">
                 <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
@@ -555,6 +562,7 @@ const ProductCard = ({ product }) => {
 const LandingPage = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [popularProducts, setPopularProducts] = useState([]);
+  const [latestBlogs, setLatestBlogs] = useState([]);
   const [topVotedProduct, setTopVotedProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -565,16 +573,18 @@ const LandingPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [featuredRes, popularRes, topVotedRes, categoriesRes] = await Promise.all([
+        const [featuredRes, popularRes, topVotedRes, categoriesRes, blogsRes] = await Promise.all([
           axios.get(`${API}/products/featured`),
           axios.get(`${API}/products/popular`),
           axios.get(`${API}/products/top-voted`),
-          axios.get(`${API}/products/categories`)
+          axios.get(`${API}/products/categories`),
+          axios.get(`${API}/blogs?limit=3`)
         ]);
         setFeaturedProducts(featuredRes.data);
         setPopularProducts(popularRes.data);
         setTopVotedProduct(topVotedRes.data);
         setCategories(categoriesRes.data);
+        setLatestBlogs(blogsRes.data);
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {
@@ -625,6 +635,23 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="landing-page">
+      <SEO
+        title="Ghana Jersey Shop for Black Stars Jersey, Retro Kits and Designer Drops"
+        description="Buy Ghana jersey styles, Black Stars jersey drops, retro Ghana football shirts, and creative local designer kits from one marketplace built around Ghana jersey culture."
+        canonicalPath="/"
+        keywords="ghana jersey, black stars jersey, buy ghana jersey, ghana football jersey, ghana soccer jersey, blackstars jersey"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "GhanaJersey.co",
+          url: window.location.origin,
+          potentialAction: {
+            "@type": "SearchAction",
+            target: `${window.location.origin}/products?search={search_term_string}`,
+            "query-input": "required name=search_term_string"
+          }
+        }}
+      />
       <Header />
 
       {/* Hero Section */}
@@ -632,7 +659,7 @@ const LandingPage = () => {
         <div className="absolute inset-0">
           <img
             src="https://customer-assets.emergentagent.com/job_kente-market-1/artifacts/5rjkj9m0_Hero%20Banner.jpg"
-            alt="Ghana Jersey Collection"
+            alt="Ghana jersey and Black Stars jersey collection"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-black/30"></div>
@@ -668,6 +695,15 @@ const LandingPage = () => {
 
       {/* Marquee */}
       <Marquee />
+
+      <section className="py-14 px-6 md:px-12 bg-white border-b border-black/5">
+        <div className="max-w-5xl mx-auto text-center">
+          <h2 className="font-heading text-2xl md:text-3xl tracking-wide uppercase">Your Home for Ghana Jersey and Black Stars Jersey Shopping</h2>
+          <p className="font-body text-muted-text leading-7 mt-5">
+            GhanaJersey.co is built to rank and serve for Ghana jersey discovery, Black Stars jersey shopping, retro Ghana football shirts, and modern local designer releases. We combine curated product listings, cultural storytelling, and search-friendly category pages so fans can find the right Ghana jersey faster.
+          </p>
+        </div>
+      </section>
 
       {/* Personalized: Recently Viewed (if any) */}
       {recentlyViewed.length > 0 && (
@@ -752,7 +788,7 @@ const LandingPage = () => {
             <div className="aspect-square overflow-hidden">
               <img
                 src={topVotedProduct?.images?.[0] || categoryImages["official-tournament"]}
-                alt="Top Voted Jersey"
+                alt="Top voted Ghana jersey"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
               />
             </div>
@@ -805,6 +841,39 @@ const LandingPage = () => {
           ))}
         </div>
       </section>
+
+      {latestBlogs.length > 0 && (
+        <section className="py-20 px-6 md:px-12 bg-white border-t border-black/5">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
+              <div>
+                <p className="font-body text-xs uppercase tracking-[0.25em] text-ashanti-gold mb-3">Latest Articles</p>
+                <h2 className="font-heading text-2xl md:text-3xl tracking-wide uppercase">Ghana Jersey News and Black Stars Updates</h2>
+              </div>
+              <Link to="/blog" className="font-body text-sm font-semibold hover:text-ashanti-gold transition-colors">
+                Visit Blog
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {latestBlogs.map((post) => (
+                <Link key={post.blog_id} to={`/blog/${post.slug}`} className="border border-black/10 bg-bone-white hover:border-black transition-colors overflow-hidden group">
+                  {post.featured_image && (
+                    <div className="aspect-[4/3] overflow-hidden">
+                      <img src={post.featured_image} alt={post.featured_image_alt || post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                    </div>
+                  )}
+                  <div className="p-5">
+                    <p className="font-body text-xs uppercase tracking-[0.2em] text-muted-text mb-3">{post.category || "News"}</p>
+                    <h3 className="font-heading text-xl tracking-wide">{post.title}</h3>
+                    <p className="font-body text-sm text-muted-text mt-3 leading-6">{post.excerpt}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Popular Jerseys */}
       <section className="py-24 px-6 md:px-12 bg-white">

@@ -23,6 +23,9 @@ import PrivacyPage from "./pages/PrivacyPage";
 import ComparePage from "./pages/ComparePage";
 import VendorOnboarding from "./pages/VendorOnboarding";
 import PaymentCallbackPage from "./pages/PaymentCallbackPage";
+import BlogPage from "./pages/BlogPage";
+import BlogPostPage from "./pages/BlogPostPage";
+import AdminBlogPage from "./pages/AdminBlogPage";
 import { LocalizationProvider } from "./localization";
 import { UserActivityProvider } from "./context/UserActivityContext";
 import CookieConsent from "./components/CookieConsent";
@@ -439,6 +442,13 @@ function AppRouter() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/compare" element={<ComparePage />} />
+      <Route path="/blog" element={<BlogPage />} />
+      <Route path="/blog/:slug" element={<BlogPostPage />} />
+      <Route path={`${ADMIN_PORTAL_PATH}/blog`} element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <AdminBlogPage />
+        </ProtectedRoute>
+      } />
     </Routes>
   );
 }

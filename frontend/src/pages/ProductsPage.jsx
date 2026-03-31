@@ -7,6 +7,7 @@ import { Slider } from "../components/ui/slider";
 import { Header, Footer, ProductCard, MobileBottomNav } from "./LandingPage";
 import { API } from "../App";
 import axios from "axios";
+import SEO from "../components/SEO";
 
 const ProductsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -71,6 +72,14 @@ const ProductsPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="products-page">
+      <SEO
+        title={selectedCategory ? `${categories.find(c => c.id === selectedCategory)?.name || "Ghana Jersey"} Collection` : "Shop Ghana Jersey and Black Stars Jersey Collection"}
+        description={selectedCategory
+          ? `Browse ${categories.find(c => c.id === selectedCategory)?.name || "Ghana jersey"} styles, Black Stars jersey looks, and curated Ghana football shirts.`
+          : "Browse Ghana jersey styles, Black Stars jersey options, retro Ghana football shirts, and designer kits across the full collection."}
+        canonicalPath={`/products${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
+        keywords={`ghana jersey, black stars jersey, ghana football jersey, ${selectedCategory || "ghana jersey shop"}`}
+      />
       <Header forceLight={true} stickyAnnouncement={true} />
 
       {/* Page Header */}

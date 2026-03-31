@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Header, Footer } from "./LandingPage";
-import { useAuth, API } from "../App";
+import { useAuth, API, ADMIN_PORTAL_PATH } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -177,6 +177,11 @@ const AdminDashboard = () => {
             Admin Dashboard
           </h1>
           <p className="font-body text-muted-text mt-2">Manage your marketplace</p>
+          <div className="mt-4">
+            <Link to={`${ADMIN_PORTAL_PATH}/blog`}>
+              <Button variant="outline" className="border-black">Open Blog Editor</Button>
+            </Link>
+          </div>
         </div>
 
         {/* Revenue Stats Grid */}
