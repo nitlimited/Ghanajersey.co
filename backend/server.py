@@ -8,6 +8,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 import os
 import logging
 import json
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
@@ -22,6 +23,7 @@ import requests
 import boto3
 import stripe
 from urllib.parse import urlparse, urlunparse
+from xml.sax.saxutils import escape as xml_escape
 
 ROOT_DIR = Path(__file__).parent
 FRONTEND_BUILD_DIR = ROOT_DIR.parent / "frontend" / "build"
@@ -111,6 +113,45 @@ def build_confirmation_link(request: Request, order_id: str, token: str) -> str:
 
 async def notify_admin(subject: str, html: str, text: Optional[str] = None) -> bool:
     return await send_resend_email(ADMIN_EMAIL, subject, html, text=text)
+
+def get_frontend_base_url(request: Optional[Request] = None) -> str:
+    if os.environ.get("FRONTEND_URL"):
+        return os.environ["FRONTEND_URL"].rstrip("/")
+    if request:
+        return str(request.base_url).rstrip("/")
+    return "https://ghanajersey.co"
+
+def slugify_text(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
+    return slug.strip("-") or f"post-{uuid.uuid4().hex[:8]}"
+
+def strip_html_tags(value: str) -> str:
+    return re.sub(r"<[^>]+>", "", value or "").strip()
+
+def estimate_reading_minutes(content: str) -> int:
+    words = len(strip_html_tags(content).split())
+    return max(1, round(words / 200)) if words else 1
+
+async def ensure_unique_blog_slug(base_slug: str, existing_blog_id: Optional[str] = None) -> str:
+    slug = slugify_text(base_slug)
+    suffix = 1
+    while True:
+        existing = await db.blogs.find_one({"slug": slug}, {"_id": 0, "blog_id": 1})
+        if not existing or existing.get("blog_id") == existing_blog_id:
+            return slug
+        suffix += 1
+        slug = f"{slugify_text(base_slug)}-{suffix}"
+
+def normalize_blog_document(blog: dict, request: Optional[Request] = None) -> dict:
+    base_url = get_frontend_base_url(request)
+    blog["url"] = f"{base_url}/blog/{blog['slug']}"
+    blog["meta_title"] = blog.get("meta_title") or blog.get("title")
+    blog["meta_description"] = blog.get("meta_description") or blog.get("excerpt") or strip_html_tags(blog.get("content", ""))[:160]
+    blog["og_image"] = blog.get("og_image") or blog.get("featured_image")
+    blog["canonical_url"] = blog.get("canonical_url") or blog["url"]
+    blog["keywords"] = blog.get("keywords") or []
+    blog["tags"] = blog.get("tags") or []
+    return blog
 
 def build_file_url(path: str) -> str:
     return f"/api/files/{path}"
@@ -629,6 +670,45 @@ class DiscountCodeCreate(BaseModel):
     discount_percent: float
     max_uses: int
     expires_at: datetime
+
+class BlogBase(BaseModel):
+    title: str
+    slug: Optional[str] = None
+    excerpt: Optional[str] = None
+    content: str
+    featured_image: Optional[str] = None
+    featured_image_alt: Optional[str] = None
+    category: Optional[str] = "News"
+    tags: List[str] = []
+    keywords: List[str] = []
+    author_name: Optional[str] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    canonical_url: Optional[str] = None
+    og_image: Optional[str] = None
+    is_published: bool = False
+    publish_at: Optional[str] = None
+
+class BlogCreate(BlogBase):
+    pass
+
+class BlogUpdate(BaseModel):
+    title: Optional[str] = None
+    slug: Optional[str] = None
+    excerpt: Optional[str] = None
+    content: Optional[str] = None
+    featured_image: Optional[str] = None
+    featured_image_alt: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    keywords: Optional[List[str]] = None
+    author_name: Optional[str] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    canonical_url: Optional[str] = None
+    og_image: Optional[str] = None
+    is_published: Optional[bool] = None
+    publish_at: Optional[str] = None
 
 # Newsletter Models
 class NewsletterSubscribe(BaseModel):
@@ -1615,6 +1695,77 @@ async def delete_vendor_promo(promo_id: str, user: dict = Depends(get_vendor_use
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Promo not found")
     return {"message": "Promo deleted"}
+
+def build_blog_document(payload: Dict[str, Any], author_name: str, existing: Optional[dict] = None) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    title = payload.get("title") if payload.get("title") is not None else (existing.get("title") if existing else "")
+    content = payload.get("content") if payload.get("content") is not None else (existing.get("content") if existing else "")
+    excerpt = payload.get("excerpt")
+    if not excerpt:
+        excerpt = (existing.get("excerpt") if existing else None) or strip_html_tags(content)[:180]
+
+    blog_doc = {
+        "blog_id": existing.get("blog_id") if existing else f"blog_{uuid.uuid4().hex[:12]}",
+        "title": title,
+        "slug": payload.get("slug") or (existing.get("slug") if existing else None),
+        "excerpt": excerpt,
+        "content": content,
+        "featured_image": payload.get("featured_image") if payload.get("featured_image") is not None else (existing.get("featured_image") if existing else None),
+        "featured_image_alt": payload.get("featured_image_alt") if payload.get("featured_image_alt") is not None else (existing.get("featured_image_alt") if existing else None),
+        "category": payload.get("category") if payload.get("category") is not None else (existing.get("category") if existing else "News"),
+        "tags": payload.get("tags") if payload.get("tags") is not None else (existing.get("tags") if existing else []),
+        "keywords": payload.get("keywords") if payload.get("keywords") is not None else (existing.get("keywords") if existing else []),
+        "author_name": payload.get("author_name") if payload.get("author_name") is not None else (existing.get("author_name") if existing else author_name),
+        "meta_title": payload.get("meta_title") if payload.get("meta_title") is not None else (existing.get("meta_title") if existing else title),
+        "meta_description": payload.get("meta_description") if payload.get("meta_description") is not None else (existing.get("meta_description") if existing else excerpt),
+        "canonical_url": payload.get("canonical_url") if payload.get("canonical_url") is not None else (existing.get("canonical_url") if existing else None),
+        "og_image": payload.get("og_image") if payload.get("og_image") is not None else (existing.get("og_image") if existing else payload.get("featured_image")),
+        "is_published": payload.get("is_published") if payload.get("is_published") is not None else (existing.get("is_published") if existing else False),
+        "publish_at": payload.get("publish_at") if payload.get("publish_at") is not None else (existing.get("publish_at") if existing else None),
+        "reading_minutes": estimate_reading_minutes(content),
+        "updated_at": now,
+        "created_at": existing.get("created_at") if existing else now,
+    }
+    if blog_doc["is_published"] and not blog_doc["publish_at"]:
+        blog_doc["publish_at"] = now
+    return blog_doc
+
+# ==================== BLOG ROUTES ====================
+
+@api_router.get("/blogs")
+async def get_blogs(
+    limit: int = 12,
+    category: Optional[str] = None,
+    search: Optional[str] = None
+):
+    query: Dict[str, Any] = {"is_published": True}
+    if category:
+        query["category"] = category
+    if search:
+        query["$or"] = [
+            {"title": {"$regex": search, "$options": "i"}},
+            {"excerpt": {"$regex": search, "$options": "i"}},
+            {"keywords": {"$in": [search.lower()]}},
+            {"tags": {"$in": [search.lower()]}}
+        ]
+
+    blogs = await db.blogs.find(query, {"_id": 0}).sort([("publish_at", -1), ("created_at", -1)]).limit(limit).to_list(limit)
+    for blog in blogs:
+        normalize_blog_document(blog)
+    return blogs
+
+@api_router.get("/blogs/categories")
+async def get_blog_categories():
+    categories = await db.blogs.distinct("category", {"is_published": True})
+    return [category for category in categories if category]
+
+@api_router.get("/blogs/{slug}")
+async def get_blog_post(slug: str, request: Request):
+    blog = await db.blogs.find_one({"slug": slug, "is_published": True}, {"_id": 0})
+    if not blog:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+    normalize_blog_document(blog, request=request)
+    return blog
 
 # ==================== PRODUCT ROUTES (PUBLIC) ====================
 
@@ -2786,6 +2937,43 @@ async def get_product_reviews(product_id: str):
 
 # ==================== ADMIN ROUTES ====================
 
+@api_router.get("/admin/blogs")
+async def get_admin_blogs(user: dict = Depends(get_admin_user)):
+    blogs = await db.blogs.find({}, {"_id": 0}).sort([("updated_at", -1), ("created_at", -1)]).to_list(200)
+    for blog in blogs:
+        normalize_blog_document(blog)
+    return blogs
+
+@api_router.post("/admin/blogs")
+async def create_admin_blog(blog: BlogCreate, user: dict = Depends(get_admin_user)):
+    payload = blog.model_dump()
+    blog_doc = build_blog_document(payload, user.get("name") or "Admin")
+    blog_doc["slug"] = await ensure_unique_blog_slug(blog_doc.get("slug") or blog_doc["title"])
+    normalize_blog_document(blog_doc)
+    await db.blogs.insert_one(blog_doc)
+    return {"blog_id": blog_doc["blog_id"], "slug": blog_doc["slug"], "message": "Blog post saved"}
+
+@api_router.put("/admin/blogs/{blog_id}")
+async def update_admin_blog(blog_id: str, blog: BlogUpdate, user: dict = Depends(get_admin_user)):
+    existing = await db.blogs.find_one({"blog_id": blog_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+
+    payload = {k: v for k, v in blog.model_dump().items() if v is not None}
+    blog_doc = build_blog_document(payload, user.get("name") or "Admin", existing=existing)
+    blog_doc["slug"] = await ensure_unique_blog_slug(blog_doc.get("slug") or blog_doc["title"], existing_blog_id=blog_id)
+    normalize_blog_document(blog_doc)
+
+    await db.blogs.update_one({"blog_id": blog_id}, {"$set": blog_doc})
+    return {"blog_id": blog_id, "slug": blog_doc["slug"], "message": "Blog post updated"}
+
+@api_router.delete("/admin/blogs/{blog_id}")
+async def delete_admin_blog(blog_id: str, user: dict = Depends(get_admin_user)):
+    result = await db.blogs.delete_one({"blog_id": blog_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Blog post not found")
+    return {"message": "Blog post deleted"}
+
 @api_router.get("/admin/dashboard")
 async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
     # Get statistics
@@ -3267,6 +3455,71 @@ app.add_middleware(
 if (FRONTEND_BUILD_DIR / "static").exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_BUILD_DIR / "static"), name="frontend-static")
 
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt(request: Request):
+    base_url = get_frontend_base_url(request)
+    admin_path = os.environ.get("REACT_APP_ADMIN_PORTAL_PATH", "/control-room")
+    if not admin_path.startswith("/"):
+        admin_path = f"/{admin_path}"
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        f"Disallow: {admin_path}\n"
+        "Disallow: /api/admin/\n"
+        f"Sitemap: {base_url}/sitemap.xml\n"
+    )
+    return Response(content=content, media_type="text/plain")
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml(request: Request):
+    base_url = get_frontend_base_url(request)
+    static_urls = [
+        ("", "daily", "1.0"),
+        ("/products", "daily", "0.9"),
+        ("/sell", "weekly", "0.7"),
+        ("/blog", "daily", "0.8"),
+        ("/compare", "weekly", "0.5"),
+        ("/privacy", "yearly", "0.3"),
+        ("/terms", "yearly", "0.3"),
+    ]
+
+    products = await db.products.find(
+        {"status": "approved"},
+        {"_id": 0, "product_id": 1, "updated_at": 1, "created_at": 1}
+    ).to_list(5000)
+    blogs = await db.blogs.find(
+        {"is_published": True},
+        {"_id": 0, "slug": 1, "updated_at": 1, "publish_at": 1, "created_at": 1}
+    ).to_list(5000)
+
+    url_entries = []
+    for path, changefreq, priority in static_urls:
+        url_entries.append(
+            f"<url><loc>{xml_escape(base_url + path)}</loc><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>"
+        )
+
+    for product in products:
+        lastmod = product.get("updated_at") or product.get("created_at")
+        lastmod_xml = f"<lastmod>{xml_escape(lastmod)}</lastmod>" if lastmod else ""
+        url_entries.append(
+            f"<url><loc>{xml_escape(base_url + '/products/' + product['product_id'])}</loc>{lastmod_xml}<changefreq>weekly</changefreq><priority>0.8</priority></url>"
+        )
+
+    for blog in blogs:
+        lastmod = blog.get("updated_at") or blog.get("publish_at") or blog.get("created_at")
+        lastmod_xml = f"<lastmod>{xml_escape(lastmod)}</lastmod>" if lastmod else ""
+        url_entries.append(
+            f"<url><loc>{xml_escape(base_url + '/blog/' + blog['slug'])}</loc>{lastmod_xml}<changefreq>weekly</changefreq><priority>0.7</priority></url>"
+        )
+
+    xml_content = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(url_entries) +
+        '</urlset>'
+    )
+    return Response(content=xml_content, media_type="application/xml")
+
 
 def _frontend_asset_response(requested_path: str = ""):
     if not FRONTEND_BUILD_DIR.exists():
@@ -3332,6 +3585,9 @@ async def startup_event():
     await db.products.create_index("product_id", unique=True)
     await db.products.create_index("vendor_id")
     await db.products.create_index("status")
+    await db.blogs.create_index("blog_id", unique=True)
+    await db.blogs.create_index("slug", unique=True)
+    await db.blogs.create_index("is_published")
     await db.orders.create_index("order_id", unique=True)
     await db.orders.create_index("customer_id")
     
