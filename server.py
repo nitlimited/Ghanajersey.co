@@ -115,6 +115,22 @@ async def notify_admin(subject: str, html: str, text: Optional[str] = None) -> b
 def build_file_url(path: str) -> str:
     return f"/api/files/{path}"
 
+def normalize_image_url(image: str) -> str:
+    if not image:
+        return image
+    if image.startswith("/api/files/"):
+        return image
+    if image.startswith(f"{APP_NAME}/"):
+        return build_file_url(image)
+    marker = f"/{APP_NAME}/"
+    if marker in image:
+        return build_file_url(f"{APP_NAME}/" + image.split(marker, 1)[1])
+    return image
+
+def normalize_product_document(product: dict) -> dict:
+    product["images"] = [normalize_image_url(image) for image in product.get("images", []) if image]
+    return product
+
 def init_storage():
     """Initialize S3-compatible storage client once and reuse it."""
     global s3_client
@@ -998,6 +1014,9 @@ async def get_vendor_products(user: dict = Depends(get_vendor_user)):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
+        if isinstance(product.get('reviewed_at'), str):
+            product['reviewed_at'] = datetime.fromisoformat(product['reviewed_at'])
+        normalize_product_document(product)
     
     return products
 
@@ -1487,6 +1506,7 @@ async def get_products(
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
+        normalize_product_document(product)
     
     return products
 
@@ -1500,6 +1520,7 @@ async def get_featured_products():
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
+        normalize_product_document(product)
     
     return products
 
@@ -1604,6 +1625,8 @@ async def get_top_voted_product():
     )
     if product and isinstance(product.get('created_at'), str):
         product['created_at'] = datetime.fromisoformat(product['created_at'])
+    if product:
+        normalize_product_document(product)
     return product
 
 @api_router.get("/products/by-category/{category}")
@@ -1616,6 +1639,7 @@ async def get_products_by_category(category: str, limit: int = 8):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
+        normalize_product_document(product)
     
     return products
 
@@ -1629,6 +1653,7 @@ async def get_popular_products(limit: int = 8):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
+        normalize_product_document(product)
     
     return products
 
@@ -1642,6 +1667,7 @@ async def get_vendor_public_products(vendor_id: str, limit: int = 8):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
+        normalize_product_document(product)
     
     return products
 
@@ -1677,6 +1703,7 @@ async def get_product(product_id: str, request: Request):
     
     if isinstance(product.get('created_at'), str):
         product['created_at'] = datetime.fromisoformat(product['created_at'])
+    normalize_product_document(product)
     
     # Ensure vote_count exists for consistency
     if 'vote_count' not in product:
@@ -1724,6 +1751,7 @@ async def get_cart(user: dict = Depends(get_current_user)):
             {"_id": 0}
         )
         if product:
+            normalize_product_document(product)
             item_price = product["price"]
             item_price_ghs = product.get("price_ghs") or 0
             
@@ -2817,7 +2845,11 @@ async def get_pending_products(user: dict = Depends(get_admin_user)):
 async def approve_product(product_id: str, approval: ProductApproval, user: dict = Depends(get_admin_user)):
     result = await db.products.update_one(
         {"product_id": product_id},
-        {"$set": {"status": approval.status}}
+        {"$set": {
+            "status": approval.status,
+            "reviewed_at": datetime.now(timezone.utc).isoformat(),
+            "reviewed_by": user["user_id"]
+        }}
     )
     
     if result.modified_count == 0:
