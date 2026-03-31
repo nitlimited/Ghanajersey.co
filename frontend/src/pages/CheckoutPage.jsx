@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { CreditCard, Truck, Shield } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -13,13 +13,16 @@ import { toast } from "sonner";
 import axios from "axios";
 
 const CheckoutPage = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
-  const { cart, clearCart } = useCart();
+  const { user, token, register, login } = useAuth();
+  const { cart, clearCart, syncGuestCartToServer } = useCart();
   const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(isGhana ? "paystack" : "stripe");
+  const [customerAccount, setCustomerAccount] = useState({
+    email: user?.email || "",
+    password: ""
+  });
 
   const [shippingAddress, setShippingAddress] = useState({
     full_name: user?.name || "",
@@ -69,7 +72,57 @@ const CheckoutPage = () => {
         return false;
       }
     }
+
+    if (!user) {
+      if (!customerAccount.email) {
+        toast.error("Please provide an email for your order");
+        return false;
+      }
+      if (!customerAccount.password || customerAccount.password.length < 6) {
+        toast.error("Please create a password with at least 6 characters");
+        return false;
+      }
+    }
+
     return true;
+  };
+
+  const ensureCheckoutCustomer = async () => {
+    if (token && user) {
+      return token;
+    }
+
+    try {
+      const newUser = await register(
+        customerAccount.email,
+        customerAccount.password,
+        shippingAddress.full_name,
+        "customer"
+      );
+      const authToken = localStorage.getItem("auth_token");
+      if (!authToken) {
+        throw new Error("Customer session could not be created");
+      }
+      await syncGuestCartToServer(authToken);
+      toast.success(`Account created for ${newUser.name}. Continuing to payment.`);
+      return authToken;
+    } catch (error) {
+      if (error.response?.data?.detail === "Email already registered") {
+        const existingUser = await login(customerAccount.email, customerAccount.password);
+        if (existingUser.role !== "customer") {
+          throw new Error("This email belongs to a non-customer account. Please use a different email for checkout.");
+        }
+        const authToken = localStorage.getItem("auth_token");
+        if (!authToken) {
+          throw new Error("Customer session could not be created");
+        }
+        await syncGuestCartToServer(authToken);
+        toast.success("Signed in to your customer account. Continuing to payment.");
+        return authToken;
+      }
+
+      throw error;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -84,6 +137,8 @@ const CheckoutPage = () => {
     setLoading(true);
 
     try {
+      const activeToken = await ensureCheckoutCustomer();
+
       // Create order with correct currency based on location
       const orderItems = cart.items.map(item => ({
         product_id: item.product_id,
@@ -104,7 +159,7 @@ const CheckoutPage = () => {
         shipping_cost: shippingCost,
         total: total
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${activeToken}` }
       });
 
       const { order_id } = orderResponse.data;
@@ -117,7 +172,7 @@ const CheckoutPage = () => {
           order_id,
           origin_url: originUrl
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         // Redirect to Stripe
@@ -127,12 +182,12 @@ const CheckoutPage = () => {
           order_id,
           origin_url: originUrl
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         // For demo, simulate PayPal success
         const captureResponse = await axios.post(`${API}/payments/paypal/capture/${paymentResponse.data.order_id}`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         if (captureResponse.data.status === "COMPLETED") {
@@ -143,10 +198,10 @@ const CheckoutPage = () => {
         // Paystack for Ghana customers (GHS) or other African countries
         const paymentResponse = await axios.post(`${API}/payments/paystack/initialize`, {
           order_id,
-          email: user?.email,
+          email: user?.email || customerAccount.email,
           callback_url: `${originUrl}/payment/paystack/callback`
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         if (paymentResponse.data.authorization_url) {
@@ -158,7 +213,7 @@ const CheckoutPage = () => {
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      toast.error(error.response?.data?.detail || "Checkout failed. Please try again.");
+      toast.error(error.response?.data?.detail || error.message || "Checkout failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -188,6 +243,37 @@ const CheckoutPage = () => {
                   <Truck size={24} />
                   <h2 className="font-heading text-lg tracking-widest uppercase">Shipping Address</h2>
                 </div>
+
+                {!user && (
+                  <div className="mb-8 border border-black/10 bg-black/[0.02] p-5 space-y-4">
+                    <div>
+                      <h3 className="font-heading text-sm tracking-widest uppercase">Customer Account</h3>
+                      <p className="font-body text-sm text-muted-text mt-2">
+                        Your customer account will be created during checkout so you can track this order later.
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="font-body text-sm uppercase tracking-wider">Email</Label>
+                      <Input
+                        type="email"
+                        value={customerAccount.email}
+                        onChange={(e) => setCustomerAccount((prev) => ({ ...prev, email: e.target.value }))}
+                        className="mt-2 rounded-none border-black/20 focus:border-black"
+                        data-testid="checkout-email"
+                      />
+                    </div>
+                    <div>
+                      <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
+                      <Input
+                        type="password"
+                        value={customerAccount.password}
+                        onChange={(e) => setCustomerAccount((prev) => ({ ...prev, password: e.target.value }))}
+                        className="mt-2 rounded-none border-black/20 focus:border-black"
+                        data-testid="checkout-password"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">

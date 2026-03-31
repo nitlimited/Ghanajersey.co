@@ -1,15 +1,13 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Minus, Plus, X, ShoppingBag } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Header, Footer } from "./LandingPage";
-import { useAuth, useCart } from "../App";
+import { useCart } from "../App";
 import { useLocalization } from "../localization";
 
 const CartPage = () => {
-  const { user } = useAuth();
   const { cart, updateCartItem, removeFromCart, loading } = useCart();
-  const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
+  const { isGhana, formatPrice } = useLocalization();
   const navigate = useNavigate();
 
   // Get the correct price based on location
@@ -29,10 +27,6 @@ const CartPage = () => {
   };
 
   const handleCheckout = () => {
-    if (!user) {
-      navigate("/auth", { state: { from: { pathname: "/checkout" } } });
-      return;
-    }
     navigate("/checkout");
   };
 

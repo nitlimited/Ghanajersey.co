@@ -259,6 +259,37 @@ const VendorDashboard = () => {
     }
   };
 
+  const handleRemoveProductImage = async (index) => {
+    const imagePath = productForm.images[index];
+    if (!imagePath) {
+      setProductForm((prev) => {
+        const nextImages = [...prev.images];
+        nextImages[index] = "";
+        return { ...prev, images: nextImages };
+      });
+      return;
+    }
+
+    try {
+      toast.loading("Removing image...", { id: `remove-product-image-${index}` });
+      await axios.delete(`${API}/upload/file`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { path: imagePath }
+      });
+
+      setProductForm((prev) => {
+        let nextImages = prev.images.filter((_, currentIndex) => currentIndex !== index);
+        if (nextImages.length === 0) {
+          nextImages = [""];
+        }
+        return { ...prev, images: nextImages };
+      });
+      toast.success("Image removed", { id: `remove-product-image-${index}` });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to remove image", { id: `remove-product-image-${index}` });
+    }
+  };
+
   const handleUpdateOrderStatus = async (orderId, status) => {
     try {
       await axios.put(`${API}/vendor/orders/${orderId}/status?status=${status}`, {}, {
@@ -605,7 +636,17 @@ const VendorDashboard = () => {
                         )}
                       </div>
                       {img && (
-                        <img src={img} alt={`Product ${index + 1}`} className="w-20 h-20 object-cover border border-black/10" />
+                        <div className="flex items-center gap-3">
+                          <img src={img} alt={`Product ${index + 1}`} className="w-20 h-20 object-cover border border-black/10" />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemoveProductImage(index)}
+                          >
+                            <Trash2 size={14} className="mr-1" /> Remove
+                          </Button>
+                        </div>
                       )}
                     </div>
                   ))}

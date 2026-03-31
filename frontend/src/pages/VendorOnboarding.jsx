@@ -114,6 +114,25 @@ const VendorOnboarding = () => {
     }));
   };
 
+  const handleDeleteUploadedImage = async (path, onSuccess, toastId) => {
+    if (!path) {
+      onSuccess();
+      return;
+    }
+
+    try {
+      toast.loading("Removing image...", { id: toastId });
+      await axios.delete(`${API}/upload/file`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { path }
+      });
+      onSuccess();
+      toast.success("Image removed", { id: toastId });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to remove image", { id: toastId });
+    }
+  };
+
   const addSocialHandle = () => {
     setFormData(prev => ({
       ...prev,
@@ -936,12 +955,30 @@ const VendorOnboarding = () => {
                         }}
                       />
                       {photo && (
-                        <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
-                          <img 
-                            src={`${API}/files/${photo}`} 
-                            alt={`Jersey ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
+                            <img 
+                              src={`${API}/files/${photo}`} 
+                              alt={`Jersey ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteUploadedImage(
+                              photo,
+                              () => {
+                                const newPhotos = [...formData.verification.jersey_photos];
+                                newPhotos[index] = "";
+                                updateFormData('verification', 'jersey_photos', newPhotos);
+                              },
+                              `delete-jersey-${index}`
+                            )}
+                          >
+                            <X size={14} className="mr-1" /> Remove
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -990,12 +1027,26 @@ const VendorOnboarding = () => {
                     }}
                   />
                   {formData.verification.packaging_photo && (
-                    <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
-                      <img 
-                        src={`${API}/files/${formData.verification.packaging_photo}`} 
-                        alt="Packaging"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
+                        <img 
+                          src={`${API}/files/${formData.verification.packaging_photo}`} 
+                          alt="Packaging"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteUploadedImage(
+                          formData.verification.packaging_photo,
+                          () => updateFormData('verification', 'packaging_photo', ""),
+                          "delete-packaging"
+                        )}
+                      >
+                        <X size={14} className="mr-1" /> Remove
+                      </Button>
                     </div>
                   )}
                 </div>

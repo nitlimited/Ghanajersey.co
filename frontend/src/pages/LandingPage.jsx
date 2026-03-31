@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search, Home } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { useAuth, useCart, API } from "../App";
+import { useAuth, useCart, API, ADMIN_PORTAL_PATH } from "../App";
 import { useLocalization, LanguageSelector } from "../localization";
 import axios from "axios";
 
@@ -277,7 +277,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                       </Link>
                     )}
                     {user.role === "admin" && (
-                      <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
+                      <Link to={ADMIN_PORTAL_PATH} className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
                         {t('nav.adminDashboard')}
                       </Link>
                     )}
@@ -343,7 +343,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                       </Link>
                     )}
                     {user.role === "admin" && (
-                      <Link to="/admin" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-admin">
+                      <Link to={ADMIN_PORTAL_PATH} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-admin">
                         {t('nav.adminDashboard')}
                       </Link>
                     )}

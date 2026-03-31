@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, API } from "../App";
+import { useAuth, API, ADMIN_PORTAL_PATH } from "../App";
 import axios from "axios";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
@@ -42,7 +42,7 @@ const AuthCallback = () => {
 
         // Redirect based on role
         if (user.role === "admin") {
-          navigate('/admin', { replace: true, state: { user } });
+          navigate(ADMIN_PORTAL_PATH, { replace: true, state: { user } });
         } else if (user.role === "vendor") {
           navigate('/vendor', { replace: true, state: { user } });
         } else {
