@@ -377,6 +377,18 @@ const VendorDashboard = () => {
     }
   };
 
+  const productNotifications = [...products]
+    .filter((product) => ["approved", "rejected"].includes(product.status))
+    .sort((a, b) => new Date(b.reviewed_at || b.created_at || 0) - new Date(a.reviewed_at || a.created_at || 0))
+    .slice(0, 6);
+
+  const formatNotificationTime = (value) => {
+    if (!value) return "Recently";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Recently";
+    return date.toLocaleString();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bone-white">
@@ -665,6 +677,31 @@ const VendorDashboard = () => {
           </Dialog>
         </div>
 
+        {productNotifications.length > 0 && (
+          <div className="mb-8 bg-white border border-black/10 p-6">
+            <h2 className="font-heading text-lg tracking-wide uppercase mb-4">Product Notifications</h2>
+            <div className="space-y-3">
+              {productNotifications.map((product) => (
+                <div key={`notification-${product.product_id}`} className="flex items-start justify-between gap-4 border border-black/10 p-4">
+                  <div>
+                    <p className="font-body text-sm font-medium">{product.name}</p>
+                    <p className="font-body text-xs text-muted-text">Product ID: {product.product_id}</p>
+                    <p className="font-body text-xs text-muted-text mt-1">
+                      {product.status === "approved"
+                        ? "This product has been approved and can appear in the shop."
+                        : "This product was reviewed and is currently rejected."}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {getStatusBadge(product.status)}
+                    <p className="font-body text-xs text-muted-text mt-2">{formatNotificationTime(product.reviewed_at || product.created_at)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Financial Overview */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <div className="bg-black text-white p-5">
@@ -912,6 +949,7 @@ const VendorDashboard = () => {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <h3 className="font-heading text-sm tracking-wide">{product.name}</h3>
+                        <p className="font-body text-[11px] text-muted-text mt-1">Product ID: {product.product_id}</p>
                         {getStatusBadge(product.status)}
                       </div>
                       <span className="font-body text-lg font-semibold">${product.price}</span>
