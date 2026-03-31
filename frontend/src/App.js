@@ -394,6 +394,16 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   return children;
 };
 
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
+  return null;
+};
+
 // App Router with session_id detection
 function AppRouter() {
   const location = useLocation();
@@ -477,6 +487,7 @@ function App() {
           <CartProvider>
             <UserActivityProvider>
               <Toaster position="top-right" richColors />
+              <ScrollToTop />
               <AppRouter />
               <CookieConsent />
             </UserActivityProvider>

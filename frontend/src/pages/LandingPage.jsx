@@ -239,9 +239,6 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
               <Link to="/products?category=creative-designer" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
                 {t('nav.designers')}
               </Link>
-              <Link to="/blog" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`}>
-                Blog
-              </Link>
             </nav>
 
             {/* Center - Logo */}
@@ -329,9 +326,6 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
               <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.designers')}
               </Link>
-              <Link to="/blog" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
-                Blog
-              </Link>
               <div className="border-t border-black/10 mt-2 pt-2">
                 <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
                   {t('footer.sellWithUs')}
@@ -386,6 +380,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
 // Footer Component
 const Footer = () => {
   const [email, setEmail] = useState("");
+  const [showContactPanel, setShowContactPanel] = useState(false);
 
   const handleSubscribe = async (e) => {
     e.preventDefault();
@@ -438,6 +433,14 @@ const Footer = () => {
             <h4 className="font-heading text-sm tracking-wide mb-4">Company</h4>
             <nav className="flex flex-col gap-2">
               <Link to="/sell" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Become a Seller</Link>
+              <Link to="/blog" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Blog</Link>
+              <button
+                type="button"
+                onClick={() => setShowContactPanel(true)}
+                className="font-body text-sm text-left text-white/60 hover:text-ashanti-gold transition-colors"
+              >
+                Contact
+              </button>
               <Link to="/terms" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
               <Link to="/privacy" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
               <Link to="/compare" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Compare Jerseys</Link>
@@ -473,10 +476,71 @@ const Footer = () => {
           <div className="flex gap-6">
             <Link to="/terms" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
             <Link to="/privacy" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
+            <button
+              type="button"
+              onClick={() => setShowContactPanel(true)}
+              className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors"
+            >
+              Contact
+            </button>
             <span className="font-body text-xs text-white/40">Ships Worldwide</span>
           </div>
         </div>
       </div>
+      {showContactPanel && (
+        <div className="fixed inset-0 z-[110] bg-black/50" onClick={() => setShowContactPanel(false)}>
+          <div
+            className="absolute inset-x-0 bottom-0 bg-white text-black rounded-t-[28px] border-t border-black/10 shadow-2xl p-6 md:p-8 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div>
+                  <p className="font-body text-xs uppercase tracking-[0.2em] text-muted-text mb-2">Contact</p>
+                  <h3 className="font-heading text-2xl tracking-wide uppercase">GhanaJersey</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowContactPanel(false)}
+                  className="text-muted-text hover:text-black"
+                  aria-label="Close contact panel"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Trade Name</p>
+                  <p className="font-body text-base font-medium mt-2">Ghanajersey</p>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Email</p>
+                  <a href="mailto:ghanajersey.co@gmail.com" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
+                    ghanajersey.co@gmail.com
+                  </a>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Inquiry</p>
+                  <a href="mailto:info@ghanajersey.co" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
+                    info@ghanajersey.co
+                  </a>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Phone</p>
+                  <a href="tel:+233248167944" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
+                    +233248167944
+                  </a>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4 md:col-span-2">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Physical Address</p>
+                  <p className="font-body text-base font-medium mt-2">Ubor Ntiador LK, Accra - Ghana</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Extra padding for mobile bottom nav */}
       <div className="md:hidden h-16"></div>
     </footer>
