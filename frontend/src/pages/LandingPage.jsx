@@ -626,7 +626,6 @@ const ProductCard = ({ product }) => {
 const LandingPage = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [popularProducts, setPopularProducts] = useState([]);
-  const [latestBlogs, setLatestBlogs] = useState([]);
   const [topVotedProduct, setTopVotedProduct] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -637,18 +636,16 @@ const LandingPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [featuredRes, popularRes, topVotedRes, categoriesRes, blogsRes] = await Promise.all([
+        const [featuredRes, popularRes, topVotedRes, categoriesRes] = await Promise.all([
           axios.get(`${API}/products/featured`),
           axios.get(`${API}/products/popular`),
           axios.get(`${API}/products/top-voted`),
-          axios.get(`${API}/products/categories`),
-          axios.get(`${API}/blogs?limit=3`)
+          axios.get(`${API}/products/categories`)
         ]);
         setFeaturedProducts(featuredRes.data);
         setPopularProducts(popularRes.data);
         setTopVotedProduct(topVotedRes.data);
         setCategories(categoriesRes.data);
-        setLatestBlogs(blogsRes.data);
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {
@@ -730,10 +727,10 @@ const LandingPage = () => {
         </div>
         <div className="relative z-10 text-center text-white px-6 max-w-4xl">
           <h1 className="font-heading text-4xl sm:text-5xl lg:text-7xl font-semibold mb-6 animate-fade-up" data-testid="hero-title">
-            Curated Ghana Jersey
+            Wear The Black Star
           </h1>
           <p className="font-body text-lg md:text-xl text-white/90 mb-10 tracking-wide animate-fade-up italic" style={{ animationDelay: '0.2s' }}>
-            for the love of country and culture
+            Shop the pride, pulse, and culture of Ghana in every jersey
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up" style={{ animationDelay: '0.4s' }}>
             <Link to="/products">
@@ -905,39 +902,6 @@ const LandingPage = () => {
           ))}
         </div>
       </section>
-
-      {latestBlogs.length > 0 && (
-        <section className="py-20 px-6 md:px-12 bg-white border-t border-black/5">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
-              <div>
-                <p className="font-body text-xs uppercase tracking-[0.25em] text-ashanti-gold mb-3">Latest Articles</p>
-                <h2 className="font-heading text-2xl md:text-3xl tracking-wide uppercase">Ghana Jersey News and Black Stars Updates</h2>
-              </div>
-              <Link to="/blog" className="font-body text-sm font-semibold hover:text-ashanti-gold transition-colors">
-                Visit Blog
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {latestBlogs.map((post) => (
-                <Link key={post.blog_id} to={`/blog/${post.slug}`} className="border border-black/10 bg-bone-white hover:border-black transition-colors overflow-hidden group">
-                  {post.featured_image && (
-                    <div className="aspect-[4/3] overflow-hidden">
-                      <img src={post.featured_image} alt={post.featured_image_alt || post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                    </div>
-                  )}
-                  <div className="p-5">
-                    <p className="font-body text-xs uppercase tracking-[0.2em] text-muted-text mb-3">{post.category || "News"}</p>
-                    <h3 className="font-heading text-xl tracking-wide">{post.title}</h3>
-                    <p className="font-body text-sm text-muted-text mt-3 leading-6">{post.excerpt}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* Popular Jerseys */}
       <section className="py-24 px-6 md:px-12 bg-white">
