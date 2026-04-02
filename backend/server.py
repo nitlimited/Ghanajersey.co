@@ -8,9 +8,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 import os
 import logging
 import json
-import re
 from pathlib import Path
-from io import BytesIO
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
@@ -23,10 +21,6 @@ import hashlib
 import requests
 import boto3
 import stripe
-import secrets
-from PIL import Image
-from urllib.parse import urlparse, urlunparse
-from xml.sax.saxutils import escape as xml_escape
 
 ROOT_DIR = Path(__file__).parent
 FRONTEND_BUILD_DIR = ROOT_DIR.parent / "frontend" / "build"
@@ -59,11 +53,6 @@ PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY')
 PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY')
 PAYSTACK_BASE_URL = "https://api.paystack.co"
 
-# Email Config
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
-RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "Black Star Threads <no-reply@ghanajersey.co>")
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "easante@nitlimited.com")
-
 # Create the main app
 app = FastAPI(title="Black Star Threads API", version="1.0.0")
 
@@ -78,237 +67,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ==================== OBJECT STORAGE FUNCTIONS ====================
-
-async def send_resend_email(to_email: str, subject: str, html: str, text: Optional[str] = None) -> bool:
-    """Send transactional email with Resend when configured."""
-    if not RESEND_API_KEY:
-        logger.warning("RESEND_API_KEY not set; skipping email '%s' to %s", subject, to_email)
-        return False
-
-    payload = {
-        "from": RESEND_FROM_EMAIL,
-        "to": [to_email],
-        "subject": subject,
-        "html": html,
-    }
-    if text:
-        payload["text"] = text
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                "https://api.resend.com/emails",
-                headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-        return True
-    except Exception as exc:
-        logger.error("Failed to send Resend email to %s: %s", to_email, exc)
-        return False
-
-def build_confirmation_link(request: Request, order_id: str, token: str) -> str:
-    base_url = os.environ.get("FRONTEND_URL") or str(request.base_url).rstrip("/")
-    return f"{base_url}/api/orders/{order_id}/confirm/{token}"
-
-async def notify_admin(subject: str, html: str, text: Optional[str] = None) -> bool:
-    return await send_resend_email(ADMIN_EMAIL, subject, html, text=text)
-
-def get_frontend_base_url(request: Optional[Request] = None) -> str:
-    if os.environ.get("FRONTEND_URL"):
-        return os.environ["FRONTEND_URL"].rstrip("/")
-    if request:
-        return str(request.base_url).rstrip("/")
-    return "https://ghanajersey.co"
-
-def slugify_text(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
-    return slug.strip("-") or f"post-{uuid.uuid4().hex[:8]}"
-
-def strip_html_tags(value: str) -> str:
-    return re.sub(r"<[^>]+>", "", value or "").strip()
-
-def estimate_reading_minutes(content: str) -> int:
-    words = len(strip_html_tags(content).split())
-    return max(1, round(words / 200)) if words else 1
-
-async def ensure_unique_blog_slug(base_slug: str, existing_blog_id: Optional[str] = None) -> str:
-    slug = slugify_text(base_slug)
-    suffix = 1
-    while True:
-        existing = await db.blogs.find_one({"slug": slug}, {"_id": 0, "blog_id": 1})
-        if not existing or existing.get("blog_id") == existing_blog_id:
-            return slug
-        suffix += 1
-        slug = f"{slugify_text(base_slug)}-{suffix}"
-
-def normalize_blog_document(blog: dict, request: Optional[Request] = None) -> dict:
-    base_url = get_frontend_base_url(request)
-    blog["url"] = f"{base_url}/blog/{blog['slug']}"
-    blog["meta_title"] = blog.get("meta_title") or blog.get("title")
-    blog["meta_description"] = blog.get("meta_description") or blog.get("excerpt") or strip_html_tags(blog.get("content", ""))[:160]
-    blog["og_image"] = blog.get("og_image") or blog.get("featured_image")
-    blog["canonical_url"] = blog.get("canonical_url") or blog["url"]
-    blog["keywords"] = blog.get("keywords") or []
-    blog["tags"] = blog.get("tags") or []
-    return blog
-
-def build_file_url(path: str) -> str:
-    return f"/api/files/{path}"
-
-def extract_storage_path(value: Optional[str]) -> Optional[str]:
-    if not value:
-        return value
-    if value.startswith("/api/files/"):
-        return value[len("/api/files/"):]
-    parsed = urlparse(value)
-    if parsed.path.startswith("/api/files/"):
-        return parsed.path[len("/api/files/"):]
-    marker = f"/{APP_NAME}/"
-    if marker in parsed.path:
-        return f"{APP_NAME}/" + parsed.path.split(marker, 1)[1]
-    if value.startswith(f"{APP_NAME}/"):
-        return value
-    return value
-
-def normalize_image_url(image: str) -> str:
-    if not image:
-        return image
-    if image.startswith("/api/files/"):
-        return image
-    if image.startswith(f"{APP_NAME}/"):
-        return build_file_url(image)
-    marker = f"/{APP_NAME}/"
-    if marker in image:
-        return build_file_url(f"{APP_NAME}/" + image.split(marker, 1)[1])
-    return image
-
-def normalize_product_document(product: dict) -> dict:
-    product["images"] = [normalize_image_url(image) for image in product.get("images", []) if image]
-    return product
-
-def add_currency_amount(target: Dict[str, float], currency: Optional[str], amount: float) -> None:
-    normalized_currency = (currency or "USD").upper()
-    target[normalized_currency] = round(target.get(normalized_currency, 0) + float(amount or 0), 2)
-
-def commission_breakdown(source: Dict[str, float], rate: float) -> Dict[str, float]:
-    return {
-        currency: round(amount * rate, 2)
-        for currency, amount in source.items()
-    }
-
-def format_money_breakdown(source: Dict[str, float]) -> str:
-    if not source:
-        return "USD 0.00"
-    return " • ".join(f"{currency} {amount:.2f}" for currency, amount in sorted(source.items()))
-
-def build_login_code() -> str:
-    return f"{secrets.randbelow(900000) + 100000}"
-
-def build_vendor_login_email(name: str, code: str) -> str:
-    return f"""
-    <div>
-      <h2>Vendor sign-in verification</h2>
-      <p>Hi {name},</p>
-      <p>Use this verification code to complete your vendor sign-in:</p>
-      <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">{code}</p>
-      <p>This code expires in 10 minutes.</p>
-      <p>If you did not request this sign-in, you can safely ignore this email.</p>
-    </div>
-    """
-
-ALLOWED_IMAGE_TYPES = {
-    "image/jpeg": "JPG/JPEG",
-    "image/png": "PNG",
-    "image/webp": "WEBP",
-}
-MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
-PRODUCT_IMAGE_MIN_WIDTH = 1200
-PRODUCT_IMAGE_MIN_HEIGHT = 1500
-PRODUCT_IMAGE_RECOMMENDED_WIDTH = 1600
-PRODUCT_IMAGE_RECOMMENDED_HEIGHT = 2000
-ONBOARDING_IMAGE_MIN_WIDTH = 1000
-ONBOARDING_IMAGE_MIN_HEIGHT = 1000
-
-def open_image_for_validation(data: bytes) -> Image.Image:
-    try:
-        image = Image.open(BytesIO(data))
-        image.load()
-        return image
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image") from exc
-
-def border_white_ratio(image: Image.Image) -> float:
-    rgb_image = image.convert("RGB")
-    width, height = rgb_image.size
-    border_x = max(12, int(width * 0.06))
-    border_y = max(12, int(height * 0.06))
-    pixels = []
-
-    for x in range(width):
-        for y in range(border_y):
-            pixels.append(rgb_image.getpixel((x, y)))
-        for y in range(height - border_y, height):
-            pixels.append(rgb_image.getpixel((x, y)))
-
-    for y in range(border_y, height - border_y):
-        for x in range(border_x):
-            pixels.append(rgb_image.getpixel((x, y)))
-        for x in range(width - border_x, width):
-            pixels.append(rgb_image.getpixel((x, y)))
-
-    if not pixels:
-        return 0.0
-
-    white_pixels = 0
-    for r, g, b in pixels:
-        if min(r, g, b) >= 232 and max(r, g, b) - min(r, g, b) <= 22:
-            white_pixels += 1
-
-    return white_pixels / len(pixels)
-
-def validate_image_upload(
-    *,
-    file: UploadFile,
-    data: bytes,
-    upload_type: str,
-    require_white_background: bool = False,
-) -> None:
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=400, detail="Allowed image formats: JPG, JPEG, PNG, WEBP")
-
-    if len(data) > MAX_IMAGE_SIZE_BYTES:
-        raise HTTPException(status_code=400, detail="Image size must be 5MB or less")
-
-    image = open_image_for_validation(data)
-    width, height = image.size
-
-    if upload_type == "product":
-        if width < PRODUCT_IMAGE_MIN_WIDTH or height < PRODUCT_IMAGE_MIN_HEIGHT:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Product images must be at least "
-                    f"{PRODUCT_IMAGE_MIN_WIDTH}x{PRODUCT_IMAGE_MIN_HEIGHT}px. "
-                    f"Recommended size is {PRODUCT_IMAGE_RECOMMENDED_WIDTH}x{PRODUCT_IMAGE_RECOMMENDED_HEIGHT}px."
-                ),
-            )
-        if require_white_background:
-            ratio = border_white_ratio(image)
-            if ratio < 0.92:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Front and back product images must use a clean white background."
-                )
-    else:
-        if width < ONBOARDING_IMAGE_MIN_WIDTH or height < ONBOARDING_IMAGE_MIN_HEIGHT:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Verification images must be at least {ONBOARDING_IMAGE_MIN_WIDTH}x{ONBOARDING_IMAGE_MIN_HEIGHT}px."
-            )
 
 def init_storage():
     """Initialize S3-compatible storage client once and reuse it."""
@@ -325,27 +83,7 @@ def init_storage():
         if S3_REGION:
             client_kwargs["region_name"] = S3_REGION
         if S3_ENDPOINT_URL:
-            parsed_endpoint = urlparse(S3_ENDPOINT_URL)
-            normalized_endpoint = S3_ENDPOINT_URL
-
-            # Cloudflare R2 API endpoint should not include the bucket path.
-            # If a bucket URL was pasted in by mistake, strip the path and keep only scheme + host.
-            if parsed_endpoint.scheme and parsed_endpoint.netloc and parsed_endpoint.path not in ("", "/"):
-                normalized_endpoint = urlunparse((
-                    parsed_endpoint.scheme,
-                    parsed_endpoint.netloc,
-                    "",
-                    "",
-                    "",
-                    "",
-                ))
-                logger.warning(
-                    "Normalized storage endpoint from %s to %s for R2 compatibility",
-                    S3_ENDPOINT_URL,
-                    normalized_endpoint,
-                )
-
-            client_kwargs["endpoint_url"] = normalized_endpoint
+            client_kwargs["endpoint_url"] = S3_ENDPOINT_URL
         if os.environ.get("AWS_ACCESS_KEY_ID"):
             client_kwargs["aws_access_key_id"] = os.environ.get("AWS_ACCESS_KEY_ID")
         if os.environ.get("AWS_SECRET_ACCESS_KEY"):
@@ -359,46 +97,6 @@ def init_storage():
     except Exception as e:
         logger.error(f"Failed to initialize storage: {e}")
         return None
-
-async def store_uploaded_image(
-    file: UploadFile,
-    user_id: str,
-    folder: str,
-    *,
-    upload_type: str,
-    require_white_background: bool = False,
-) -> dict:
-    """Upload an image to S3-compatible storage and persist file metadata."""
-    data = await file.read()
-    validate_image_upload(
-        file=file,
-        data=data,
-        upload_type=upload_type,
-        require_white_background=require_white_background,
-    )
-
-    ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
-    file_path = f"{APP_NAME}/{folder}/{user_id}/{uuid.uuid4().hex[:12]}.{ext}"
-
-    result = put_object(file_path, data, file.content_type)
-    file_doc = {
-        "file_id": str(uuid.uuid4()),
-        "storage_path": result["path"],
-        "original_filename": file.filename,
-        "content_type": file.content_type,
-        "size": result.get("size", len(data)),
-        "user_id": user_id,
-        "is_deleted": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.uploaded_files.insert_one(file_doc)
-
-    return {
-        "file_id": file_doc["file_id"],
-        "path": result["path"],
-        "url": build_file_url(result["path"]),
-        "size": file_doc["size"]
-    }
 
 def put_object(path: str, data: bytes, content_type: str) -> dict:
     """Upload file to S3-compatible object storage."""
@@ -434,115 +132,6 @@ def get_object(path: str) -> tuple:
         logger.error(f"Failed to retrieve object: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve file") from e
 
-def delete_object(path: str) -> None:
-    """Delete file from S3-compatible object storage."""
-    client = init_storage()
-    if not client or not S3_BUCKET:
-        raise HTTPException(status_code=500, detail="Storage not initialized")
-
-    try:
-        client.delete_object(Bucket=S3_BUCKET, Key=path)
-    except (BotoCoreError, ClientError) as e:
-        logger.error(f"Failed to delete object: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete file") from e
-
-async def send_order_paid_notifications(order_id: str) -> None:
-    order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
-    if not order:
-        return
-
-    if order.get("order_notifications_sent_at"):
-        return
-
-    customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
-    customer_email = order.get("customer_email")
-    formatted_total = f"{order.get('currency', 'GHS')} {float(order.get('total', 0)):.2f}"
-    payment_method = order.get("payment_method", "payment")
-    items = order.get("items", [])
-
-    if customer_email:
-        await send_resend_email(
-            customer_email,
-            f"Payment confirmed: {order_id}",
-            f"""
-            <div>
-              <h2>Your payment was received</h2>
-              <p>Hi {customer_name},</p>
-              <p>Your payment for order <strong>{order_id}</strong> has been confirmed.</p>
-              <p>Total paid: <strong>{formatted_total}</strong></p>
-              <p>Payment method: {payment_method}</p>
-              <p>We will keep you updated as the vendors process your order.</p>
-            </div>
-            """,
-            text=(
-                f"Hi {customer_name}, your payment for order {order_id} has been confirmed. "
-                f"Total paid: {formatted_total}. Payment method: {payment_method}."
-            ),
-        )
-
-    await notify_admin(
-        f"Payment received: {order_id}",
-        f"""
-        <div>
-          <h2>Payment received</h2>
-          <p>Order <strong>{order_id}</strong> has been paid successfully.</p>
-          <p>Customer: {customer_name} ({customer_email or 'No email'})</p>
-          <p>Total paid: <strong>{formatted_total}</strong></p>
-          <p>Payment method: {payment_method}</p>
-        </div>
-        """,
-        text=(
-            f"Payment received for order {order_id}. Customer: {customer_name} "
-            f"({customer_email or 'No email'}). Total paid: {formatted_total}. "
-            f"Payment method: {payment_method}."
-        ),
-    )
-
-    vendor_ids = list({item["vendor_id"] for item in items if item.get("vendor_id")})
-    if vendor_ids:
-        vendors = await db.users.find(
-            {"user_id": {"$in": vendor_ids}},
-            {"_id": 0, "user_id": 1, "email": 1, "name": 1},
-        ).to_list(len(vendor_ids))
-
-        items_by_vendor: Dict[str, List[Dict[str, Any]]] = {}
-        for item in items:
-            vendor_id = item.get("vendor_id")
-            if vendor_id:
-                items_by_vendor.setdefault(vendor_id, []).append(item)
-
-        for vendor in vendors:
-            vendor_items = items_by_vendor.get(vendor["user_id"], [])
-            if not vendor_items or not vendor.get("email"):
-                continue
-
-            item_lines = "".join(
-                f"<li>{item['name']} x {item['quantity']} ({item['size']})</li>"
-                for item in vendor_items
-            )
-            await send_resend_email(
-                vendor["email"],
-                f"Paid order received: {order_id}",
-                f"""
-                <div>
-                  <h2>Payment confirmed for a new order</h2>
-                  <p>Hi {vendor.get('name') or 'Vendor'},</p>
-                  <p>Order <strong>{order_id}</strong> has been paid and is ready for processing.</p>
-                  <ul>{item_lines}</ul>
-                  <p>Customer: {customer_name}</p>
-                </div>
-                """,
-                text=(
-                    f"Hi {vendor.get('name') or 'Vendor'}, order {order_id} has been paid "
-                    f"and is ready for processing."
-                ),
-            )
-
-    await db.orders.update_one(
-        {"order_id": order_id},
-        {"$set": {"order_notifications_sent_at": datetime.now(timezone.utc).isoformat()}}
-    )
-
 
 async def _mark_transaction_paid(session_id: str):
     transaction = await db.payment_transactions.find_one(
@@ -560,8 +149,6 @@ async def _mark_transaction_paid(session_id: str):
             {"order_id": transaction["order_id"]},
             {"$set": {"payment_status": "paid", "order_status": "processing"}}
         )
-
-        await send_order_paid_notifications(transaction["order_id"])
 
     return transaction
 
@@ -584,9 +171,6 @@ class UserCreate(BaseModel):
     password: str
     name: str
     role: str = "customer"
-
-class DeleteUploadedFileRequest(BaseModel):
-    path: str
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -801,45 +385,6 @@ class DiscountCodeCreate(BaseModel):
     max_uses: int
     expires_at: datetime
 
-class BlogBase(BaseModel):
-    title: str
-    slug: Optional[str] = None
-    excerpt: Optional[str] = None
-    content: str
-    featured_image: Optional[str] = None
-    featured_image_alt: Optional[str] = None
-    category: Optional[str] = "News"
-    tags: List[str] = []
-    keywords: List[str] = []
-    author_name: Optional[str] = None
-    meta_title: Optional[str] = None
-    meta_description: Optional[str] = None
-    canonical_url: Optional[str] = None
-    og_image: Optional[str] = None
-    is_published: bool = False
-    publish_at: Optional[str] = None
-
-class BlogCreate(BlogBase):
-    pass
-
-class BlogUpdate(BaseModel):
-    title: Optional[str] = None
-    slug: Optional[str] = None
-    excerpt: Optional[str] = None
-    content: Optional[str] = None
-    featured_image: Optional[str] = None
-    featured_image_alt: Optional[str] = None
-    category: Optional[str] = None
-    tags: Optional[List[str]] = None
-    keywords: Optional[List[str]] = None
-    author_name: Optional[str] = None
-    meta_title: Optional[str] = None
-    meta_description: Optional[str] = None
-    canonical_url: Optional[str] = None
-    og_image: Optional[str] = None
-    is_published: Optional[bool] = None
-    publish_at: Optional[str] = None
-
 # Newsletter Models
 class NewsletterSubscribe(BaseModel):
     email: EmailStr
@@ -888,15 +433,6 @@ class VendorCommitment(BaseModel):
     fulfill_through_platform: bool = False
     agree_terms: bool = False
 
-class VendorPayout(BaseModel):
-    payout_method: str  # momo, bank
-    momo_number: Optional[str] = None
-    momo_network: Optional[str] = None
-    bank_name: Optional[str] = None
-    account_name: Optional[str] = None
-    account_number: Optional[str] = None
-    bank_branch: Optional[str] = None
-
 class VendorVerification(BaseModel):
     jersey_photos: List[str] = []  # URLs of uploaded photos
     packaging_photo: Optional[str] = None
@@ -909,12 +445,7 @@ class VendorOnboardingSubmit(BaseModel):
     delivery: DeliveryCapability
     quality: QualityInfo
     commitment: VendorCommitment
-    payout: VendorPayout
     verification: VendorVerification
-
-class LoginVerify2FA(BaseModel):
-    challenge_id: str
-    code: str
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -1027,24 +558,6 @@ async def register(user_data: UserCreate):
     }
     
     await db.users.insert_one(user_doc)
-
-    if user_data.role == "customer":
-        await send_resend_email(
-            user_data.email,
-            "Welcome to Black Star Threads",
-            f"""
-            <div>
-              <h2>Welcome to Black Star Threads</h2>
-              <p>Hi {user_data.name},</p>
-              <p>Your customer account has been created successfully.</p>
-              <p>You can now browse jerseys, save favorites, and place orders from the marketplace.</p>
-            </div>
-            """,
-            text=(
-                f"Hi {user_data.name}, welcome to Black Star Threads. "
-                "Your customer account has been created successfully."
-            ),
-        )
     
     token = create_jwt_token(user_id, user_data.role)
     
@@ -1066,91 +579,9 @@ async def login(credentials: UserLogin):
     
     if not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    if user["role"] == "vendor":
-        if not RESEND_API_KEY:
-            raise HTTPException(status_code=503, detail="Vendor two-step verification is not configured")
-
-        challenge_id = f"challenge_{uuid.uuid4().hex[:16]}"
-        code = build_login_code()
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-
-        await db.login_challenges.insert_one({
-            "challenge_id": challenge_id,
-            "user_id": user["user_id"],
-            "email": user["email"],
-            "code": hash_password(code),
-            "expires_at": expires_at.isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "verified": False
-        })
-
-        email_sent = await send_resend_email(
-            user["email"],
-            "Your vendor verification code",
-            build_vendor_login_email(user.get("name", "Vendor"), code),
-            text=f"Your vendor verification code is {code}. It expires in 10 minutes."
-        )
-        if not email_sent:
-            raise HTTPException(status_code=503, detail="Could not send verification code. Please try again.")
-
-        return {
-            "requires_2fa": True,
-            "challenge_id": challenge_id,
-            "email": user["email"],
-            "user": {
-                "user_id": user["user_id"],
-                "email": user["email"],
-                "name": user["name"],
-                "role": user["role"],
-                "picture": user.get("picture")
-            }
-        }
-
+    
     token = create_jwt_token(user["user_id"], user["role"])
     
-    return {
-        "token": token,
-        "user": {
-            "user_id": user["user_id"],
-            "email": user["email"],
-            "name": user["name"],
-            "role": user["role"],
-            "picture": user.get("picture")
-        }
-    }
-
-@api_router.post("/auth/login/verify-2fa")
-async def verify_login_2fa(payload: LoginVerify2FA):
-    challenge = await db.login_challenges.find_one({"challenge_id": payload.challenge_id}, {"_id": 0})
-    if not challenge:
-        raise HTTPException(status_code=404, detail="Verification session not found")
-
-    if challenge.get("verified"):
-        raise HTTPException(status_code=400, detail="Verification code already used")
-
-    expires_at = challenge.get("expires_at")
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at and expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at and expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="Verification code expired")
-
-    if not verify_password(payload.code, challenge["code"]):
-        raise HTTPException(status_code=401, detail="Invalid verification code")
-
-    user = await db.users.find_one({"user_id": challenge["user_id"]}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    await db.login_challenges.update_one(
-        {"challenge_id": payload.challenge_id},
-        {"$set": {"verified": True, "verified_at": datetime.now(timezone.utc).isoformat()}}
-    )
-
-    token = create_jwt_token(user["user_id"], user["role"])
-
     return {
         "token": token,
         "user": {
@@ -1213,22 +644,6 @@ async def exchange_session(request: Request):
             "vendor_profile": None
         }
         await db.users.insert_one(user_doc)
-        await send_resend_email(
-            email,
-            "Welcome to Black Star Threads",
-            f"""
-            <div>
-              <h2>Welcome to Black Star Threads</h2>
-              <p>Hi {name},</p>
-              <p>Your customer account has been created successfully.</p>
-              <p>You can now browse jerseys, save favorites, and place orders from the marketplace.</p>
-            </div>
-            """,
-            text=(
-                f"Hi {name}, welcome to Black Star Threads. "
-                "Your customer account has been created successfully."
-            ),
-        )
     
     # Store session
     session_doc = {
@@ -1323,7 +738,6 @@ async def submit_vendor_onboarding(data: VendorOnboardingSubmit, user: dict = De
         "delivery": data.delivery.model_dump(),
         "quality": data.quality.model_dump(),
         "commitment": data.commitment.model_dump(),
-        "payout": data.payout.model_dump(),
         "verification": data.verification.model_dump(),
         "submitted_at": datetime.now(timezone.utc).isoformat()
     }
@@ -1333,8 +747,7 @@ async def submit_vendor_onboarding(data: VendorOnboardingSubmit, user: dict = De
         "brand_name": data.identity.business_name,
         "phone": data.identity.phone_number,
         "location": data.identity.city_location,
-        "social_handles": data.identity.social_handles,
-        "payout_details": data.payout.model_dump()
+        "social_handles": data.identity.social_handles
     }
     
     await db.users.update_one(
@@ -1358,72 +771,47 @@ async def upload_vendor_image(
     if user.get("role") != "vendor":
         raise HTTPException(status_code=403, detail="Only vendors can upload verification images")
     
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only image files are allowed (jpeg, png, webp, gif)")
+    
+    # Read file data
+    data = await file.read()
+    
+    # Limit file size (5MB)
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size must be less than 5MB")
+    
+    # Generate unique path
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    file_path = f"{APP_NAME}/vendor-onboarding/{user['user_id']}/{uuid.uuid4().hex[:12]}.{ext}"
+    
     try:
-        return await store_uploaded_image(
-            file,
-            user["user_id"],
-            "vendor-onboarding",
-            upload_type="onboarding"
-        )
-    except HTTPException:
-        raise
+        result = put_object(file_path, data, file.content_type)
+        
+        # Store file reference in database
+        file_doc = {
+            "file_id": str(uuid.uuid4()),
+            "storage_path": result["path"],
+            "original_filename": file.filename,
+            "content_type": file.content_type,
+            "size": result.get("size", len(data)),
+            "user_id": user["user_id"],
+            "is_deleted": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.uploaded_files.insert_one(file_doc)
+        
+        return {
+            "file_id": file_doc["file_id"],
+            "path": result["path"],
+            "url": f"/api/files/{result['path']}",
+            "size": file_doc["size"]
+        }
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload file")
-
-@api_router.post("/upload/product-image")
-async def upload_product_image(
-    file: UploadFile = File(...),
-    slot_index: int = 0,
-    user: dict = Depends(get_current_user)
-):
-    """Upload a product image to S3-compatible storage such as Cloudflare R2."""
-    if user.get("role") != "vendor":
-        raise HTTPException(status_code=403, detail="Only vendors can upload product images")
-
-    try:
-        return await store_uploaded_image(
-            file,
-            user["user_id"],
-            "product-images",
-            upload_type="product",
-            require_white_background=slot_index in [0, 1]
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Product image upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload product image: {str(e)}")
-
-@api_router.delete("/upload/file")
-async def delete_uploaded_file(
-    payload: DeleteUploadedFileRequest,
-    user: dict = Depends(get_current_user)
-):
-    if user.get("role") != "vendor":
-        raise HTTPException(status_code=403, detail="Only vendors can delete uploaded images")
-
-    storage_path = extract_storage_path(payload.path)
-    if not storage_path:
-        raise HTTPException(status_code=400, detail="File path is required")
-
-    file_record = await db.uploaded_files.find_one(
-        {"storage_path": storage_path, "user_id": user["user_id"], "is_deleted": False},
-        {"_id": 0}
-    )
-    if not file_record:
-        raise HTTPException(status_code=404, detail="Uploaded image not found")
-
-    delete_object(storage_path)
-    await db.uploaded_files.update_one(
-        {"storage_path": storage_path, "user_id": user["user_id"]},
-        {"$set": {
-            "is_deleted": True,
-            "deleted_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-
-    return {"message": "Image removed successfully"}
 
 # Serve uploaded files
 @api_router.get("/files/{path:path}")
@@ -1438,12 +826,8 @@ async def get_file(path: str, request: Request, auth: Optional[str] = None):
     elif auth:
         token = auth
     
-    # Public storefront images and onboarding review images can be read without auth
-    public_prefixes = [
-        f"{APP_NAME}/vendor-onboarding/",
-        f"{APP_NAME}/product-images/",
-    ]
-    if not any(path.startswith(prefix) for prefix in public_prefixes):
+    # For public vendor images, allow access without auth
+    if not path.startswith(f"{APP_NAME}/vendor-onboarding/"):
         if not token:
             raise HTTPException(status_code=401, detail="Authentication required")
     
@@ -1493,9 +877,6 @@ async def get_vendor_products(user: dict = Depends(get_vendor_user)):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
-        if isinstance(product.get('reviewed_at'), str):
-            product['reviewed_at'] = datetime.fromisoformat(product['reviewed_at'])
-        normalize_product_document(product)
     
     return products
 
@@ -1591,74 +972,20 @@ async def update_vendor_order_status(order_id: str, status: str, user: dict = De
     if not vendor_items:
         raise HTTPException(status_code=403, detail="Not authorized to update this order")
     
-    status_timestamp = datetime.now(timezone.utc).isoformat()
-
     # Update vendor-specific status for this order
     await db.orders.update_one(
         {"order_id": order_id},
-        {
-            "$set": {
-                f"vendor_status.{user['user_id']}": status,
-                "order_status": status  # Also update main status
-            },
-            "$push": {
-                f"vendor_status_history.{user['user_id']}": {
-                    "status": status,
-                    "timestamp": status_timestamp,
-                    "source": "vendor"
-                }
-            }
-        }
+        {"$set": {
+            f"vendor_status.{user['user_id']}": status,
+            "order_status": status  # Also update main status
+        }}
     )
-
-    if status == "shipped":
-        customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
-        tracking_number = order.get("tracking_number")
-        tracking_message = f"Tracking number: <strong>{tracking_number}</strong>" if tracking_number else "Tracking information will be shared as soon as it is available."
-        item_summary = "".join(
-            f"<li>{item.get('name', 'Jersey')} x{item.get('quantity', 1)}</li>"
-            for item in vendor_items
-        )
-        await send_resend_email(
-            order.get("customer_email"),
-            f"Your GhanaJersey.co order {order_id} has shipped",
-            f"""
-            <div>
-              <h2>Your order is on the way</h2>
-              <p>Hi {customer_name},</p>
-              <p>Your order <strong>{order_id}</strong> has been shipped by {user.get('name', 'your vendor')}.</p>
-              <p>Order details:</p>
-              <ul>{item_summary}</ul>
-              <p>{tracking_message}</p>
-            </div>
-            """,
-            text=(
-                f"Hi {customer_name}, your order {order_id} has been shipped by {user.get('name', 'your vendor')}. "
-                f"{'Tracking number: ' + tracking_number if tracking_number else 'Tracking information will follow soon.'}"
-            ),
-        )
-
-    if status == "delivered":
-        await notify_admin(
-            f"Vendor marked order delivered: {order_id}",
-            f"""
-            <div>
-              <h2>Order marked delivered</h2>
-              <p>Vendor <strong>{user.get('name', 'Vendor')}</strong> marked order <strong>{order_id}</strong> as delivered.</p>
-              <p>Customer email: {order.get('customer_email', 'N/A')}</p>
-            </div>
-            """,
-            text=(
-                f"Vendor {user.get('name', 'Vendor')} marked order {order_id} as delivered. "
-                f"Customer email: {order.get('customer_email', 'N/A')}"
-            ),
-        )
     
     return {"message": f"Order status updated to {status}"}
 
 @api_router.post("/vendor/orders/{order_id}/send-confirmation")
-async def send_delivery_confirmation_request(order_id: str, request: Request, user: dict = Depends(get_vendor_user)):
-    """Vendor sends delivery confirmation request to customer."""
+async def send_delivery_confirmation_request(order_id: str, user: dict = Depends(get_vendor_user)):
+    """Vendor sends delivery confirmation request to customer (prepares for email integration)"""
     order = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1674,32 +1001,12 @@ async def send_delivery_confirmation_request(order_id: str, request: Request, us
             "confirmation_requested_by": user["user_id"]
         }}
     )
-
-    confirmation_link = build_confirmation_link(request, order_id, confirmation_token)
-    vendor_name = user.get("name", "your vendor")
-    customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
-    await send_resend_email(
-        order.get("customer_email"),
-        f"Confirm delivery for order {order_id}",
-        f"""
-        <div>
-          <h2>Delivery confirmation requested</h2>
-          <p>Hi {customer_name},</p>
-          <p>{vendor_name} has marked your order as delivered. Please confirm once you have received it.</p>
-          <p><a href="{confirmation_link}">Confirm delivery</a></p>
-          <p>If the button does not work, copy this link into your browser:</p>
-          <p>{confirmation_link}</p>
-        </div>
-        """,
-        text=(
-            f"Hi {customer_name}, {vendor_name} has requested delivery confirmation for order {order_id}. "
-            f"Confirm here: {confirmation_link}"
-        ),
-    )
-
+    
+    # In production, this would trigger an email to the customer
+    # For now, return the confirmation link
     return {
         "message": "Confirmation request sent",
-        "confirmation_link": confirmation_link
+        "confirmation_link": f"/api/orders/{order_id}/confirm/{confirmation_token}"
     }
 
 @api_router.get("/orders/{order_id}/confirm/{token}")
@@ -1722,42 +1029,6 @@ async def confirm_delivery(order_id: str, token: str):
             "delivery_confirmed_at": datetime.now(timezone.utc).isoformat()
         }}
     )
-
-    vendor_ids = list({item.get("vendor_id") for item in order.get("items", []) if item.get("vendor_id")})
-    vendors = []
-    if vendor_ids:
-        vendors = await db.users.find(
-            {"user_id": {"$in": vendor_ids}},
-            {"_id": 0, "user_id": 1, "email": 1, "name": 1},
-        ).to_list(len(vendor_ids))
-
-    customer_name = order.get("shipping_address", {}).get("full_name") or "Customer"
-    for vendor in vendors:
-        if not vendor.get("email"):
-            continue
-        await send_resend_email(
-            vendor["email"],
-            f"Customer confirmed receipt: {order_id}",
-            f"""
-            <div>
-              <h2>Receipt confirmed</h2>
-              <p>Hi {vendor.get('name') or 'Vendor'},</p>
-              <p>{customer_name} confirmed receipt of order <strong>{order_id}</strong>.</p>
-            </div>
-            """,
-            text=f"{customer_name} confirmed receipt of order {order_id}.",
-        )
-
-    await notify_admin(
-        f"Customer confirmed receipt: {order_id}",
-        f"""
-        <div>
-          <h2>Customer confirmed receipt</h2>
-          <p>{customer_name} confirmed receipt of order <strong>{order_id}</strong>.</p>
-        </div>
-        """,
-        text=f"{customer_name} confirmed receipt of order {order_id}.",
-    )
     
     return {"message": "Delivery confirmed. Thank you!"}
 
@@ -1775,8 +1046,6 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
     vendor_orders = []
     total_revenue = 0
     monthly_revenue = 0
-    revenue_breakdown = {}
-    monthly_revenue_breakdown = {}
     current_month = datetime.now(timezone.utc).month
     
     for order in all_orders:
@@ -1789,21 +1058,16 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
             
             if order.get("payment_status") == "paid":
                 order_total = sum(item.get("price", 0) * item.get("quantity", 1) for item in vendor_items)
-                order_currency = (order.get("currency") or "USD").upper()
                 total_revenue += order_total
-                add_currency_amount(revenue_breakdown, order_currency, order_total)
                 
                 # Check if order is from current month
                 order_date = order_copy['created_at']
                 if hasattr(order_date, 'month') and order_date.month == current_month:
                     monthly_revenue += order_total
-                    add_currency_amount(monthly_revenue_breakdown, order_currency, order_total)
     
     # Calculate earnings
     platform_commission = total_revenue * 0.15
     net_earnings = total_revenue * 0.85
-    platform_commission_breakdown = commission_breakdown(revenue_breakdown, 0.15)
-    net_earnings_breakdown = commission_breakdown(revenue_breakdown, 0.85)
     
     # Calculate payouts
     confirmed_orders = [o for o in vendor_orders if o.get("delivery_confirmed") and o.get("payment_status") == "paid"]
@@ -1817,20 +1081,6 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
         sum(item.get("price", 0) * item.get("quantity", 1) for item in o.get("items", [])) * 0.85
         for o in pending_orders
     )
-    paid_payout_breakdown = {}
-    pending_payout_breakdown = {}
-    for payout_order in confirmed_orders:
-        add_currency_amount(
-            paid_payout_breakdown,
-            payout_order.get("currency"),
-            sum(item.get("price", 0) * item.get("quantity", 1) for item in payout_order.get("items", [])) * 0.85
-        )
-    for payout_order in pending_orders:
-        add_currency_amount(
-            pending_payout_breakdown,
-            payout_order.get("currency"),
-            sum(item.get("price", 0) * item.get("quantity", 1) for item in payout_order.get("items", [])) * 0.85
-        )
     
     # Get low stock products (5 or fewer items)
     low_stock_products = [p for p in products if p.get("stock", 0) <= 5 and p.get("status") == "approved"]
@@ -1843,14 +1093,9 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
                 pid = item.get("product_id")
                 if pid:
                     if pid not in product_sales:
-                        product_sales[pid] = {"quantity": 0, "revenue": 0, "revenue_breakdown": {}}
+                        product_sales[pid] = {"quantity": 0, "revenue": 0}
                     product_sales[pid]["quantity"] += item.get("quantity", 1)
                     product_sales[pid]["revenue"] += item.get("price", 0) * item.get("quantity", 1)
-                    add_currency_amount(
-                        product_sales[pid]["revenue_breakdown"],
-                        order.get("currency"),
-                        item.get("price", 0) * item.get("quantity", 1)
-                    )
     
     top_sellers = []
     for product in products:
@@ -1858,8 +1103,7 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
             top_sellers.append({
                 **product,
                 "total_sold": product_sales[product["product_id"]]["quantity"],
-                "total_revenue": product_sales[product["product_id"]]["revenue"],
-                "revenue_breakdown": product_sales[product["product_id"]]["revenue_breakdown"]
+                "total_revenue": product_sales[product["product_id"]]["revenue"]
             })
     top_sellers.sort(key=lambda x: x["total_sold"], reverse=True)
     
@@ -1879,17 +1123,11 @@ async def get_vendor_dashboard(user: dict = Depends(get_vendor_user)):
         "total_orders": len(vendor_orders),
         "new_orders": len([o for o in vendor_orders if o.get("order_status") == "processing"]),
         "total_revenue": round(total_revenue, 2),
-        "revenue_breakdown": revenue_breakdown,
         "monthly_revenue": round(monthly_revenue, 2),
-        "monthly_revenue_breakdown": monthly_revenue_breakdown,
         "platform_commission": round(platform_commission, 2),
-        "platform_commission_breakdown": platform_commission_breakdown,
         "net_earnings": round(net_earnings, 2),
-        "net_earnings_breakdown": net_earnings_breakdown,
         "pending_payout": round(pending_payout, 2),
-        "pending_payout_breakdown": pending_payout_breakdown,
         "paid_payout": round(paid_payout, 2),
-        "paid_payout_breakdown": paid_payout_breakdown,
         "low_stock_products": low_stock_products,
         "top_sellers": top_sellers[:5],
         "total_votes": sum(p.get("vote_count", 0) for p in products)
@@ -1996,77 +1234,6 @@ async def delete_vendor_promo(promo_id: str, user: dict = Depends(get_vendor_use
         raise HTTPException(status_code=404, detail="Promo not found")
     return {"message": "Promo deleted"}
 
-def build_blog_document(payload: Dict[str, Any], author_name: str, existing: Optional[dict] = None) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
-    title = payload.get("title") if payload.get("title") is not None else (existing.get("title") if existing else "")
-    content = payload.get("content") if payload.get("content") is not None else (existing.get("content") if existing else "")
-    excerpt = payload.get("excerpt")
-    if not excerpt:
-        excerpt = (existing.get("excerpt") if existing else None) or strip_html_tags(content)[:180]
-
-    blog_doc = {
-        "blog_id": existing.get("blog_id") if existing else f"blog_{uuid.uuid4().hex[:12]}",
-        "title": title,
-        "slug": payload.get("slug") or (existing.get("slug") if existing else None),
-        "excerpt": excerpt,
-        "content": content,
-        "featured_image": payload.get("featured_image") if payload.get("featured_image") is not None else (existing.get("featured_image") if existing else None),
-        "featured_image_alt": payload.get("featured_image_alt") if payload.get("featured_image_alt") is not None else (existing.get("featured_image_alt") if existing else None),
-        "category": payload.get("category") if payload.get("category") is not None else (existing.get("category") if existing else "News"),
-        "tags": payload.get("tags") if payload.get("tags") is not None else (existing.get("tags") if existing else []),
-        "keywords": payload.get("keywords") if payload.get("keywords") is not None else (existing.get("keywords") if existing else []),
-        "author_name": payload.get("author_name") if payload.get("author_name") is not None else (existing.get("author_name") if existing else author_name),
-        "meta_title": payload.get("meta_title") if payload.get("meta_title") is not None else (existing.get("meta_title") if existing else title),
-        "meta_description": payload.get("meta_description") if payload.get("meta_description") is not None else (existing.get("meta_description") if existing else excerpt),
-        "canonical_url": payload.get("canonical_url") if payload.get("canonical_url") is not None else (existing.get("canonical_url") if existing else None),
-        "og_image": payload.get("og_image") if payload.get("og_image") is not None else (existing.get("og_image") if existing else payload.get("featured_image")),
-        "is_published": payload.get("is_published") if payload.get("is_published") is not None else (existing.get("is_published") if existing else False),
-        "publish_at": payload.get("publish_at") if payload.get("publish_at") is not None else (existing.get("publish_at") if existing else None),
-        "reading_minutes": estimate_reading_minutes(content),
-        "updated_at": now,
-        "created_at": existing.get("created_at") if existing else now,
-    }
-    if blog_doc["is_published"] and not blog_doc["publish_at"]:
-        blog_doc["publish_at"] = now
-    return blog_doc
-
-# ==================== BLOG ROUTES ====================
-
-@api_router.get("/blogs")
-async def get_blogs(
-    limit: int = 12,
-    category: Optional[str] = None,
-    search: Optional[str] = None
-):
-    query: Dict[str, Any] = {"is_published": True}
-    if category:
-        query["category"] = category
-    if search:
-        query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"excerpt": {"$regex": search, "$options": "i"}},
-            {"keywords": {"$in": [search.lower()]}},
-            {"tags": {"$in": [search.lower()]}}
-        ]
-
-    blogs = await db.blogs.find(query, {"_id": 0}).sort([("publish_at", -1), ("created_at", -1)]).limit(limit).to_list(limit)
-    for blog in blogs:
-        normalize_blog_document(blog)
-    return blogs
-
-@api_router.get("/blogs/categories")
-async def get_blog_categories():
-    categories = await db.blogs.distinct("category", {"is_published": True})
-    return [category for category in categories if category]
-
-@api_router.get("/blogs/{slug}")
-async def get_blog_post(slug: str, request: Request):
-    blog = await db.blogs.find_one({"slug": slug, "is_published": True}, {"_id": 0})
-    if not blog:
-        raise HTTPException(status_code=404, detail="Blog post not found")
-    normalize_blog_document(blog, request=request)
-    return blog
-
 # ==================== PRODUCT ROUTES (PUBLIC) ====================
 
 @api_router.get("/products")
@@ -2116,7 +1283,6 @@ async def get_products(
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
-        normalize_product_document(product)
     
     return products
 
@@ -2130,7 +1296,6 @@ async def get_featured_products():
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
-        normalize_product_document(product)
     
     return products
 
@@ -2235,8 +1400,6 @@ async def get_top_voted_product():
     )
     if product and isinstance(product.get('created_at'), str):
         product['created_at'] = datetime.fromisoformat(product['created_at'])
-    if product:
-        normalize_product_document(product)
     return product
 
 @api_router.get("/products/by-category/{category}")
@@ -2249,7 +1412,6 @@ async def get_products_by_category(category: str, limit: int = 8):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
-        normalize_product_document(product)
     
     return products
 
@@ -2263,7 +1425,6 @@ async def get_popular_products(limit: int = 8):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
-        normalize_product_document(product)
     
     return products
 
@@ -2277,7 +1438,6 @@ async def get_vendor_public_products(vendor_id: str, limit: int = 8):
     for product in products:
         if isinstance(product.get('created_at'), str):
             product['created_at'] = datetime.fromisoformat(product['created_at'])
-        normalize_product_document(product)
     
     return products
 
@@ -2313,7 +1473,6 @@ async def get_product(product_id: str, request: Request):
     
     if isinstance(product.get('created_at'), str):
         product['created_at'] = datetime.fromisoformat(product['created_at'])
-    normalize_product_document(product)
     
     # Ensure vote_count exists for consistency
     if 'vote_count' not in product:
@@ -2361,7 +1520,6 @@ async def get_cart(user: dict = Depends(get_current_user)):
             {"_id": 0}
         )
         if product:
-            normalize_product_document(product)
             item_price = product["price"]
             item_price_ghs = product.get("price_ghs") or 0
             
@@ -2710,7 +1868,6 @@ async def get_recently_viewed(user: dict = Depends(get_current_user)):
 @api_router.post("/orders")
 async def create_order(order_data: OrderCreate, user: dict = Depends(get_current_user)):
     order_id = f"order_{uuid.uuid4().hex[:12]}"
-    created_at = datetime.now(timezone.utc).isoformat()
     
     # Use currency to determine which price to use
     use_ghs = order_data.currency == "GHS"
@@ -2759,20 +1916,6 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
     
     total = subtotal + shipping_cost
     
-    vendor_status = {
-        item["vendor_id"]: "order_placed"
-        for item in items
-        if item.get("vendor_id")
-    }
-    vendor_status_history = {
-        vendor_id: [{
-            "status": "order_placed",
-            "timestamp": created_at,
-            "source": "system"
-        }]
-        for vendor_id in vendor_status
-    }
-
     order_doc = {
         "order_id": order_id,
         "customer_id": user["user_id"],
@@ -2787,10 +1930,8 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
         "payment_method": order_data.payment_method,
         "payment_status": "pending",
         "order_status": "pending",
-        "vendor_status": vendor_status,
-        "vendor_status_history": vendor_status_history,
         "tracking_number": None,
-        "created_at": created_at
+        "created_at": datetime.now(timezone.utc).isoformat()
     }
     
     await db.orders.insert_one(order_doc)
@@ -2978,19 +2119,15 @@ async def capture_paypal_order(paypal_order_id: str, user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail="Transaction not found")
     
     # Update payment status
-    paid_at = datetime.now(timezone.utc).isoformat()
-
     await db.payment_transactions.update_one(
         {"session_id": paypal_order_id},
-        {"$set": {"payment_status": "paid", "paid_at": paid_at}}
+        {"$set": {"payment_status": "paid"}}
     )
     
     await db.orders.update_one(
         {"order_id": transaction["order_id"]},
-        {"$set": {"payment_status": "paid", "order_status": "processing", "paid_at": paid_at}}
+        {"$set": {"payment_status": "paid", "order_status": "processing"}}
     )
-
-    await send_order_paid_notifications(transaction["order_id"])
     
     return {"status": "COMPLETED"}
 
@@ -3011,7 +2148,7 @@ async def initialize_paystack(checkout: PaystackInitialize, user: dict = Depends
         raise HTTPException(status_code=500, detail="Paystack not configured")
     
     # Convert amount to smallest unit (kobo for NGN, pesewas for GHS)
-    amount_smallest = int(round(float(order["total"]) * 100))
+    amount_smallest = int(order["total"] * 100)
     reference = f"bst_{uuid.uuid4().hex[:16]}"
     
     # Use callback_url from request or default
@@ -3101,7 +2238,6 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
         )
         
         if transaction and transaction["payment_status"] != "paid":
-            paid_at = datetime.now(timezone.utc).isoformat()
             # Update payment transaction
             await db.payment_transactions.update_one(
                 {"$or": [
@@ -3111,7 +2247,7 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
                 {"$set": {
                     "payment_status": "paid",
                     "paystack_transaction_id": result["data"].get("id"),
-                    "paid_at": paid_at
+                    "paid_at": datetime.now(timezone.utc).isoformat()
                 }}
             )
             
@@ -3121,11 +2257,9 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
                 {"$set": {
                     "payment_status": "paid",
                     "order_status": "processing",
-                    "paid_at": paid_at
+                    "paid_at": datetime.now(timezone.utc).isoformat()
                 }}
             )
-
-            await send_order_paid_notifications(transaction["order_id"])
         
         return {
             "status": "success",
@@ -3169,18 +2303,15 @@ async def paystack_webhook(request: Request):
         )
         
         if transaction and transaction["payment_status"] != "paid":
-            paid_at = datetime.now(timezone.utc).isoformat()
             await db.payment_transactions.update_one(
                 {"session_id": reference},
-                {"$set": {"payment_status": "paid", "paid_at": paid_at}}
+                {"$set": {"payment_status": "paid"}}
             )
             
             await db.orders.update_one(
                 {"order_id": transaction["order_id"]},
-                {"$set": {"payment_status": "paid", "order_status": "processing", "paid_at": paid_at}}
+                {"$set": {"payment_status": "paid", "order_status": "processing"}}
             )
-
-            await send_order_paid_notifications(transaction["order_id"])
     
     return {"status": "ok"}
 
@@ -3237,43 +2368,6 @@ async def get_product_reviews(product_id: str):
 
 # ==================== ADMIN ROUTES ====================
 
-@api_router.get("/admin/blogs")
-async def get_admin_blogs(user: dict = Depends(get_admin_user)):
-    blogs = await db.blogs.find({}, {"_id": 0}).sort([("updated_at", -1), ("created_at", -1)]).to_list(200)
-    for blog in blogs:
-        normalize_blog_document(blog)
-    return blogs
-
-@api_router.post("/admin/blogs")
-async def create_admin_blog(blog: BlogCreate, user: dict = Depends(get_admin_user)):
-    payload = blog.model_dump()
-    blog_doc = build_blog_document(payload, user.get("name") or "Admin")
-    blog_doc["slug"] = await ensure_unique_blog_slug(blog_doc.get("slug") or blog_doc["title"])
-    normalize_blog_document(blog_doc)
-    await db.blogs.insert_one(blog_doc)
-    return {"blog_id": blog_doc["blog_id"], "slug": blog_doc["slug"], "message": "Blog post saved"}
-
-@api_router.put("/admin/blogs/{blog_id}")
-async def update_admin_blog(blog_id: str, blog: BlogUpdate, user: dict = Depends(get_admin_user)):
-    existing = await db.blogs.find_one({"blog_id": blog_id}, {"_id": 0})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Blog post not found")
-
-    payload = {k: v for k, v in blog.model_dump().items() if v is not None}
-    blog_doc = build_blog_document(payload, user.get("name") or "Admin", existing=existing)
-    blog_doc["slug"] = await ensure_unique_blog_slug(blog_doc.get("slug") or blog_doc["title"], existing_blog_id=blog_id)
-    normalize_blog_document(blog_doc)
-
-    await db.blogs.update_one({"blog_id": blog_id}, {"$set": blog_doc})
-    return {"blog_id": blog_id, "slug": blog_doc["slug"], "message": "Blog post updated"}
-
-@api_router.delete("/admin/blogs/{blog_id}")
-async def delete_admin_blog(blog_id: str, user: dict = Depends(get_admin_user)):
-    result = await db.blogs.delete_one({"blog_id": blog_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Blog post not found")
-    return {"message": "Blog post deleted"}
-
 @api_router.get("/admin/dashboard")
 async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
     # Get statistics
@@ -3286,13 +2380,8 @@ async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
     # Calculate revenue with 15% platform commission
     paid_orders = await db.orders.find({"payment_status": "paid"}, {"_id": 0}).to_list(1000)
     total_revenue = sum(order.get("total", 0) for order in paid_orders)
-    revenue_breakdown = {}
-    for order in paid_orders:
-        add_currency_amount(revenue_breakdown, order.get("currency"), order.get("total", 0))
     platform_commission = total_revenue * 0.15
     vendor_earnings_total = total_revenue * 0.85
-    platform_commission_breakdown = commission_breakdown(revenue_breakdown, 0.15)
-    vendor_earnings_breakdown = commission_breakdown(revenue_breakdown, 0.85)
     
     # Get confirmed deliveries count
     confirmed_deliveries = await db.orders.count_documents({"delivery_confirmed": True})
@@ -3311,11 +2400,8 @@ async def get_admin_dashboard(user: dict = Depends(get_admin_user)):
         "total_vendors": total_vendors,
         "total_customers": total_customers,
         "total_revenue": round(total_revenue, 2),
-        "revenue_breakdown": revenue_breakdown,
         "platform_commission": round(platform_commission, 2),
-        "platform_commission_breakdown": platform_commission_breakdown,
         "vendor_earnings_total": round(vendor_earnings_total, 2),
-        "vendor_earnings_breakdown": vendor_earnings_breakdown,
         "confirmed_deliveries": confirmed_deliveries,
         "pending_confirmations": pending_confirmations,
         "recent_orders": recent_orders
@@ -3339,20 +2425,16 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
         all_orders = await db.orders.find({"payment_status": "paid"}, {"_id": 0}).to_list(1000)
         
         vendor_revenue = 0
-        revenue_breakdown = {}
         for order in all_orders:
             for item in order.get("items", []):
                 if item.get("product_id") in product_ids:
                     item_total = item.get("price", 0) * item.get("quantity", 1)
                     vendor_revenue += item_total
-                    add_currency_amount(revenue_breakdown, order.get("currency"), item_total)
                     if order not in vendor_orders:
                         vendor_orders.append(order)
         
         platform_commission = vendor_revenue * 0.15
         net_earnings = vendor_revenue * 0.85
-        platform_commission_breakdown = commission_breakdown(revenue_breakdown, 0.15)
-        net_earnings_breakdown = commission_breakdown(revenue_breakdown, 0.85)
         
         # Get confirmed deliveries for this vendor
         confirmed_orders = [o for o in vendor_orders if o.get("delivery_confirmed")]
@@ -3368,24 +2450,6 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
                 if item.get("product_id") in product_ids) * 0.85
             for o in confirmed_orders
         )
-        pending_payout_breakdown = {}
-        paid_payout_breakdown = {}
-        for payout_order in vendor_orders:
-            if payout_order.get("delivery_confirmed"):
-                continue
-            payout_total = sum(
-                item.get("price", 0) * item.get("quantity", 1)
-                for item in payout_order.get("items", [])
-                if item.get("product_id") in product_ids
-            ) * 0.85
-            add_currency_amount(pending_payout_breakdown, payout_order.get("currency"), payout_total)
-        for payout_order in confirmed_orders:
-            payout_total = sum(
-                item.get("price", 0) * item.get("quantity", 1)
-                for item in payout_order.get("items", [])
-                if item.get("product_id") in product_ids
-            ) * 0.85
-            add_currency_amount(paid_payout_breakdown, payout_order.get("currency"), payout_total)
         
         # Get vote counts for vendor's products
         total_votes = sum(p.get("vote_count", 0) for p in products)
@@ -3401,15 +2465,10 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
             "pending_products": len([p for p in products if p.get("status") == "pending"]),
             "total_orders": len(vendor_orders),
             "total_revenue": round(vendor_revenue, 2),
-            "revenue_breakdown": revenue_breakdown,
             "platform_commission": round(platform_commission, 2),
-            "platform_commission_breakdown": platform_commission_breakdown,
             "net_earnings": round(net_earnings, 2),
-            "net_earnings_breakdown": net_earnings_breakdown,
             "pending_payout": round(pending_payout, 2),
-            "pending_payout_breakdown": pending_payout_breakdown,
             "paid_payout": round(paid_payout, 2),
-            "paid_payout_breakdown": paid_payout_breakdown,
             "total_votes": total_votes,
             "created_at": vendor.get("created_at"),
             "is_active": vendor.get("is_active", True)
@@ -3458,11 +2517,7 @@ async def get_pending_products(user: dict = Depends(get_admin_user)):
 async def approve_product(product_id: str, approval: ProductApproval, user: dict = Depends(get_admin_user)):
     result = await db.products.update_one(
         {"product_id": product_id},
-        {"$set": {
-            "status": approval.status,
-            "reviewed_at": datetime.now(timezone.utc).isoformat(),
-            "reviewed_by": user["user_id"]
-        }}
+        {"$set": {"status": approval.status}}
     )
     
     if result.modified_count == 0:
@@ -3532,26 +2587,8 @@ async def approve_vendor(user_id: str, approved: bool, rejection_reason: Optiona
         {"user_id": user_id},
         {"$set": update_data}
     )
-
-    subject = "Your vendor application has been approved" if approved else "Update on your vendor application"
-    vendor_name = vendor.get("name") or "Vendor"
-    status_message = (
-        "Your seller account is now approved and you can access the vendor dashboard."
-        if approved
-        else f"Your application was not approved at this time. Reason: {rejection_reason or 'No reason provided.'}"
-    )
-    await send_resend_email(
-        vendor["email"],
-        subject,
-        f"""
-        <div>
-          <h2>{subject}</h2>
-          <p>Hi {vendor_name},</p>
-          <p>{status_message}</p>
-        </div>
-        """,
-        text=f"Hi {vendor_name}, {status_message}",
-    )
+    
+    # TODO: Send email notification to vendor
     
     return {"message": f"Vendor {'approved' if approved else 'rejected'}"}
 
@@ -3570,43 +2607,10 @@ async def update_vendor_status(user_id: str, is_active: bool, user: dict = Depen
 @api_router.get("/admin/orders")
 async def get_all_orders(user: dict = Depends(get_admin_user)):
     orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    vendor_ids = {
-        item.get("vendor_id")
-        for order in orders
-        for item in order.get("items", [])
-        if item.get("vendor_id")
-    }
-    vendors_by_id = {}
-
-    if vendor_ids:
-        vendors = await db.users.find(
-            {"user_id": {"$in": list(vendor_ids)}},
-            {"_id": 0, "user_id": 1, "name": 1, "email": 1}
-        ).to_list(len(vendor_ids))
-        vendors_by_id = {vendor["user_id"]: vendor for vendor in vendors}
     
     for order in orders:
         if isinstance(order.get('created_at'), str):
             order['created_at'] = datetime.fromisoformat(order['created_at'])
-
-        vendor_status = order.get("vendor_status", {})
-        vendor_status_history = order.get("vendor_status_history", {})
-        enriched_items = []
-
-        for item in order.get("items", []):
-            vendor_id = item.get("vendor_id")
-            vendor = vendors_by_id.get(vendor_id, {})
-            history = vendor_status_history.get(vendor_id, [])
-
-            enriched_items.append({
-                **item,
-                "vendor_name": vendor.get("name", "Vendor"),
-                "vendor_email": vendor.get("email"),
-                "processing_status": vendor_status.get(vendor_id, "order_placed"),
-                "processing_history": history,
-            })
-
-        order["items"] = enriched_items
     
     return orders
 
@@ -3790,71 +2794,6 @@ app.add_middleware(
 if (FRONTEND_BUILD_DIR / "static").exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_BUILD_DIR / "static"), name="frontend-static")
 
-@app.get("/robots.txt", include_in_schema=False)
-async def robots_txt(request: Request):
-    base_url = get_frontend_base_url(request)
-    admin_path = os.environ.get("REACT_APP_ADMIN_PORTAL_PATH", "/control-room")
-    if not admin_path.startswith("/"):
-        admin_path = f"/{admin_path}"
-    content = (
-        "User-agent: *\n"
-        "Allow: /\n"
-        f"Disallow: {admin_path}\n"
-        "Disallow: /api/admin/\n"
-        f"Sitemap: {base_url}/sitemap.xml\n"
-    )
-    return Response(content=content, media_type="text/plain")
-
-@app.get("/sitemap.xml", include_in_schema=False)
-async def sitemap_xml(request: Request):
-    base_url = get_frontend_base_url(request)
-    static_urls = [
-        ("", "daily", "1.0"),
-        ("/products", "daily", "0.9"),
-        ("/sell", "weekly", "0.7"),
-        ("/blog", "daily", "0.8"),
-        ("/compare", "weekly", "0.5"),
-        ("/privacy", "yearly", "0.3"),
-        ("/terms", "yearly", "0.3"),
-    ]
-
-    products = await db.products.find(
-        {"status": "approved"},
-        {"_id": 0, "product_id": 1, "updated_at": 1, "created_at": 1}
-    ).to_list(5000)
-    blogs = await db.blogs.find(
-        {"is_published": True},
-        {"_id": 0, "slug": 1, "updated_at": 1, "publish_at": 1, "created_at": 1}
-    ).to_list(5000)
-
-    url_entries = []
-    for path, changefreq, priority in static_urls:
-        url_entries.append(
-            f"<url><loc>{xml_escape(base_url + path)}</loc><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>"
-        )
-
-    for product in products:
-        lastmod = product.get("updated_at") or product.get("created_at")
-        lastmod_xml = f"<lastmod>{xml_escape(lastmod)}</lastmod>" if lastmod else ""
-        url_entries.append(
-            f"<url><loc>{xml_escape(base_url + '/products/' + product['product_id'])}</loc>{lastmod_xml}<changefreq>weekly</changefreq><priority>0.8</priority></url>"
-        )
-
-    for blog in blogs:
-        lastmod = blog.get("updated_at") or blog.get("publish_at") or blog.get("created_at")
-        lastmod_xml = f"<lastmod>{xml_escape(lastmod)}</lastmod>" if lastmod else ""
-        url_entries.append(
-            f"<url><loc>{xml_escape(base_url + '/blog/' + blog['slug'])}</loc>{lastmod_xml}<changefreq>weekly</changefreq><priority>0.7</priority></url>"
-        )
-
-    xml_content = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        + "".join(url_entries) +
-        '</urlset>'
-    )
-    return Response(content=xml_content, media_type="application/xml")
-
 
 def _frontend_asset_response(requested_path: str = ""):
     if not FRONTEND_BUILD_DIR.exists():
@@ -3920,13 +2859,8 @@ async def startup_event():
     await db.products.create_index("product_id", unique=True)
     await db.products.create_index("vendor_id")
     await db.products.create_index("status")
-    await db.blogs.create_index("blog_id", unique=True)
-    await db.blogs.create_index("slug", unique=True)
-    await db.blogs.create_index("is_published")
     await db.orders.create_index("order_id", unique=True)
     await db.orders.create_index("customer_id")
-    await db.login_challenges.create_index("challenge_id", unique=True)
-    await db.login_challenges.create_index("expires_at")
     
     logger.info("Database indexes created")
 
