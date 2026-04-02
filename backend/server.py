@@ -10,6 +10,7 @@ import logging
 import json
 import re
 from pathlib import Path
+from io import BytesIO
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
@@ -23,6 +24,7 @@ import requests
 import boto3
 import stripe
 import secrets
+from PIL import Image
 from urllib.parse import urlparse, urlunparse
 from xml.sax.saxutils import escape as xml_escape
 
@@ -218,6 +220,96 @@ def build_vendor_login_email(name: str, code: str) -> str:
     </div>
     """
 
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": "JPG/JPEG",
+    "image/png": "PNG",
+    "image/webp": "WEBP",
+}
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+PRODUCT_IMAGE_MIN_WIDTH = 1200
+PRODUCT_IMAGE_MIN_HEIGHT = 1500
+PRODUCT_IMAGE_RECOMMENDED_WIDTH = 1600
+PRODUCT_IMAGE_RECOMMENDED_HEIGHT = 2000
+ONBOARDING_IMAGE_MIN_WIDTH = 1000
+ONBOARDING_IMAGE_MIN_HEIGHT = 1000
+
+def open_image_for_validation(data: bytes) -> Image.Image:
+    try:
+        image = Image.open(BytesIO(data))
+        image.load()
+        return image
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image") from exc
+
+def border_white_ratio(image: Image.Image) -> float:
+    rgb_image = image.convert("RGB")
+    width, height = rgb_image.size
+    border_x = max(12, int(width * 0.06))
+    border_y = max(12, int(height * 0.06))
+    pixels = []
+
+    for x in range(width):
+        for y in range(border_y):
+            pixels.append(rgb_image.getpixel((x, y)))
+        for y in range(height - border_y, height):
+            pixels.append(rgb_image.getpixel((x, y)))
+
+    for y in range(border_y, height - border_y):
+        for x in range(border_x):
+            pixels.append(rgb_image.getpixel((x, y)))
+        for x in range(width - border_x, width):
+            pixels.append(rgb_image.getpixel((x, y)))
+
+    if not pixels:
+        return 0.0
+
+    white_pixels = 0
+    for r, g, b in pixels:
+        if min(r, g, b) >= 232 and max(r, g, b) - min(r, g, b) <= 22:
+            white_pixels += 1
+
+    return white_pixels / len(pixels)
+
+def validate_image_upload(
+    *,
+    file: UploadFile,
+    data: bytes,
+    upload_type: str,
+    require_white_background: bool = False,
+) -> None:
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Allowed image formats: JPG, JPEG, PNG, WEBP")
+
+    if len(data) > MAX_IMAGE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Image size must be 5MB or less")
+
+    image = open_image_for_validation(data)
+    width, height = image.size
+
+    if upload_type == "product":
+        if width < PRODUCT_IMAGE_MIN_WIDTH or height < PRODUCT_IMAGE_MIN_HEIGHT:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Product images must be at least "
+                    f"{PRODUCT_IMAGE_MIN_WIDTH}x{PRODUCT_IMAGE_MIN_HEIGHT}px. "
+                    f"Recommended size is {PRODUCT_IMAGE_RECOMMENDED_WIDTH}x{PRODUCT_IMAGE_RECOMMENDED_HEIGHT}px."
+                ),
+            )
+        if require_white_background:
+            ratio = border_white_ratio(image)
+            if ratio < 0.92:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Front and back product images must use a clean white background."
+                )
+    else:
+        if width < ONBOARDING_IMAGE_MIN_WIDTH or height < ONBOARDING_IMAGE_MIN_HEIGHT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Verification images must be at least {ONBOARDING_IMAGE_MIN_WIDTH}x{ONBOARDING_IMAGE_MIN_HEIGHT}px."
+            )
+
 def init_storage():
     """Initialize S3-compatible storage client once and reuse it."""
     global s3_client
@@ -268,15 +360,22 @@ def init_storage():
         logger.error(f"Failed to initialize storage: {e}")
         return None
 
-async def store_uploaded_image(file: UploadFile, user_id: str, folder: str) -> dict:
+async def store_uploaded_image(
+    file: UploadFile,
+    user_id: str,
+    folder: str,
+    *,
+    upload_type: str,
+    require_white_background: bool = False,
+) -> dict:
     """Upload an image to S3-compatible storage and persist file metadata."""
-    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/gif"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only image files are allowed (jpeg, png, webp, gif)")
-
     data = await file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File size must be less than 5MB")
+    validate_image_upload(
+        file=file,
+        data=data,
+        upload_type=upload_type,
+        require_white_background=require_white_background,
+    )
 
     ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
     file_path = f"{APP_NAME}/{folder}/{user_id}/{uuid.uuid4().hex[:12]}.{ext}"
@@ -1260,7 +1359,12 @@ async def upload_vendor_image(
         raise HTTPException(status_code=403, detail="Only vendors can upload verification images")
     
     try:
-        return await store_uploaded_image(file, user["user_id"], "vendor-onboarding")
+        return await store_uploaded_image(
+            file,
+            user["user_id"],
+            "vendor-onboarding",
+            upload_type="onboarding"
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1270,6 +1374,7 @@ async def upload_vendor_image(
 @api_router.post("/upload/product-image")
 async def upload_product_image(
     file: UploadFile = File(...),
+    slot_index: int = 0,
     user: dict = Depends(get_current_user)
 ):
     """Upload a product image to S3-compatible storage such as Cloudflare R2."""
@@ -1277,7 +1382,13 @@ async def upload_product_image(
         raise HTTPException(status_code=403, detail="Only vendors can upload product images")
 
     try:
-        return await store_uploaded_image(file, user["user_id"], "product-images")
+        return await store_uploaded_image(
+            file,
+            user["user_id"],
+            "product-images",
+            upload_type="product",
+            require_white_background=slot_index in [0, 1]
+        )
     except HTTPException:
         raise
     except Exception as e:
