@@ -171,7 +171,7 @@ const SellYourJerseyPage = () => {
               <CheckCircle size={24} className="text-ghana-green flex-shrink-0 mt-1" />
               <div>
                 <h4 className="font-body font-semibold mb-1">High-Quality Images</h4>
-                <p className="font-body text-sm text-muted-text">For product listings, the first 2 images must show the full jersey front and back on a clean white background. Allowed formats are JPG, JPEG, PNG, and WEBP up to 5MB each. Minimum size is 1200 x 1500 px and recommended size is 1600 x 2000 px.</p>
+                <p className="font-body text-sm text-muted-text">Minimum 3 photos showing front, back, and details. White or neutral background preferred.</p>
               </div>
             </div>
             <div className="flex items-start gap-4">

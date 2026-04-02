@@ -2,10 +2,9 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search, Home } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { useAuth, useCart, API, ADMIN_PORTAL_PATH } from "../App";
+import { useAuth, useCart, API } from "../App";
 import { useLocalization, LanguageSelector } from "../localization";
 import axios from "axios";
-import SEO from "../components/SEO";
 
 // Announcement Bar Component
 const AnnouncementBar = ({ isSticky = false }) => {
@@ -278,7 +277,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                       </Link>
                     )}
                     {user.role === "admin" && (
-                      <Link to={ADMIN_PORTAL_PATH} className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
+                      <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
                         {t('nav.adminDashboard')}
                       </Link>
                     )}
@@ -330,40 +329,6 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                 <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
                   {t('footer.sellWithUs')}
                 </Link>
-                {user ? (
-                  <>
-                    <Link to="/dashboard" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-dashboard">
-                      {t('nav.myOrders')}
-                    </Link>
-                    <Link to="/wishlist" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-wishlist">
-                      {t('nav.wishlist')}
-                    </Link>
-                    {user.role === "vendor" && (
-                      <Link to="/vendor" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-vendor">
-                        {t('nav.vendorDashboard')}
-                      </Link>
-                    )}
-                    {user.role === "admin" && (
-                      <Link to={ADMIN_PORTAL_PATH} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-admin">
-                        {t('nav.adminDashboard')}
-                      </Link>
-                    )}
-                    <button
-                      onClick={() => {
-                        logout();
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-left px-6 py-3 font-body text-sm font-semibold tracking-wide text-ghana-red block"
-                      data-testid="mobile-btn-logout"
-                    >
-                      {t('nav.logout')}
-                    </button>
-                  </>
-                ) : (
-                  <Link to="/auth" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-auth">
-                    Sign In
-                  </Link>
-                )}
                 {/* Mobile Language Selector */}
                 <div className="px-6 py-3">
                   <LanguageSelector variant="light" />
@@ -380,7 +345,6 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
 // Footer Component
 const Footer = () => {
   const [email, setEmail] = useState("");
-  const [showContactPanel, setShowContactPanel] = useState(false);
 
   const handleSubscribe = async (e) => {
     e.preventDefault();
@@ -433,14 +397,6 @@ const Footer = () => {
             <h4 className="font-heading text-sm tracking-wide mb-4">Company</h4>
             <nav className="flex flex-col gap-2">
               <Link to="/sell" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Become a Seller</Link>
-              <Link to="/blog" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Blog</Link>
-              <button
-                type="button"
-                onClick={() => setShowContactPanel(true)}
-                className="font-body text-sm text-left text-white/60 hover:text-ashanti-gold transition-colors"
-              >
-                Contact
-              </button>
               <Link to="/terms" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
               <Link to="/privacy" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
               <Link to="/compare" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Compare Jerseys</Link>
@@ -476,71 +432,10 @@ const Footer = () => {
           <div className="flex gap-6">
             <Link to="/terms" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
             <Link to="/privacy" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
-            <button
-              type="button"
-              onClick={() => setShowContactPanel(true)}
-              className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors"
-            >
-              Contact
-            </button>
             <span className="font-body text-xs text-white/40">Ships Worldwide</span>
           </div>
         </div>
       </div>
-      {showContactPanel && (
-        <div className="fixed inset-0 z-[110] bg-black/50" onClick={() => setShowContactPanel(false)}>
-          <div
-            className="absolute inset-x-0 bottom-0 bg-white text-black rounded-t-[28px] border-t border-black/10 shadow-2xl p-6 md:p-8 max-h-[85vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="max-w-3xl mx-auto">
-              <div className="flex items-start justify-between gap-4 mb-6">
-                <div>
-                  <p className="font-body text-xs uppercase tracking-[0.2em] text-muted-text mb-2">Contact</p>
-                  <h3 className="font-heading text-2xl tracking-wide uppercase">GhanaJersey</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowContactPanel(false)}
-                  className="text-muted-text hover:text-black"
-                  aria-label="Close contact panel"
-                >
-                  <X size={22} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="border border-black/10 bg-bone-white p-4">
-                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Trade Name</p>
-                  <p className="font-body text-base font-medium mt-2">Ghanajersey</p>
-                </div>
-                <div className="border border-black/10 bg-bone-white p-4">
-                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Email</p>
-                  <a href="mailto:ghanajersey.co@gmail.com" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
-                    ghanajersey.co@gmail.com
-                  </a>
-                </div>
-                <div className="border border-black/10 bg-bone-white p-4">
-                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Inquiry</p>
-                  <a href="mailto:info@ghanajersey.co" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
-                    info@ghanajersey.co
-                  </a>
-                </div>
-                <div className="border border-black/10 bg-bone-white p-4">
-                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Phone</p>
-                  <a href="tel:+233248167944" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
-                    +233248167944
-                  </a>
-                </div>
-                <div className="border border-black/10 bg-bone-white p-4 md:col-span-2">
-                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Physical Address</p>
-                  <p className="font-body text-base font-medium mt-2">Ubor Ntiador LK, Accra - Ghana</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Extra padding for mobile bottom nav */}
       <div className="md:hidden h-16"></div>
     </footer>
@@ -696,23 +591,6 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="landing-page">
-      <SEO
-        title="Ghana Jersey Shop for Black Stars Jersey, Retro Kits and Designer Drops"
-        description="Buy Ghana jersey styles, Black Stars jersey drops, retro Ghana football shirts, and creative local designer kits from one marketplace built around Ghana jersey culture."
-        canonicalPath="/"
-        keywords="ghana jersey, black stars jersey, buy ghana jersey, ghana football jersey, ghana soccer jersey, blackstars jersey"
-        jsonLd={{
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: "GhanaJersey.co",
-          url: window.location.origin,
-          potentialAction: {
-            "@type": "SearchAction",
-            target: `${window.location.origin}/products?search={search_term_string}`,
-            "query-input": "required name=search_term_string"
-          }
-        }}
-      />
       <Header />
 
       {/* Hero Section */}
@@ -720,17 +598,17 @@ const LandingPage = () => {
         <div className="absolute inset-0">
           <img
             src="https://customer-assets.emergentagent.com/job_kente-market-1/artifacts/5rjkj9m0_Hero%20Banner.jpg"
-            alt="Ghana jersey and Black Stars jersey collection"
+            alt="Ghana Jersey Collection"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-black/30"></div>
         </div>
         <div className="relative z-10 text-center text-white px-6 max-w-4xl">
           <h1 className="font-heading text-4xl sm:text-5xl lg:text-7xl font-semibold mb-6 animate-fade-up" data-testid="hero-title">
-            Wear The Black Star
+            Curated Ghana Jersey
           </h1>
           <p className="font-body text-lg md:text-xl text-white/90 mb-10 tracking-wide animate-fade-up italic" style={{ animationDelay: '0.2s' }}>
-            Shop the pride, pulse, and culture of Ghana in every jersey
+            for the love of country and culture
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up" style={{ animationDelay: '0.4s' }}>
             <Link to="/products">
@@ -756,15 +634,6 @@ const LandingPage = () => {
 
       {/* Marquee */}
       <Marquee />
-
-      <section className="py-14 px-6 md:px-12 bg-white border-b border-black/5">
-        <div className="max-w-5xl mx-auto text-center">
-          <h2 className="font-heading text-2xl md:text-3xl tracking-wide uppercase">Your Home for Ghana Jersey and Black Stars Jersey Shopping</h2>
-          <p className="font-body text-muted-text leading-7 mt-5">
-            GhanaJersey.co is built to rank and serve for Ghana jersey discovery, Black Stars jersey shopping, retro Ghana football shirts, and modern local designer releases. We combine curated product listings, cultural storytelling, and search-friendly category pages so fans can find the right Ghana jersey faster.
-          </p>
-        </div>
-      </section>
 
       {/* Personalized: Recently Viewed (if any) */}
       {recentlyViewed.length > 0 && (
@@ -849,7 +718,7 @@ const LandingPage = () => {
             <div className="aspect-square overflow-hidden">
               <img
                 src={topVotedProduct?.images?.[0] || categoryImages["official-tournament"]}
-                alt="Top voted Ghana jersey"
+                alt="Top Voted Jersey"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
               />
             </div>

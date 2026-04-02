@@ -11,7 +11,6 @@ import { useAuth, useCart, API } from "../App";
 import { useLocalization } from "../localization";
 import { toast } from "sonner";
 import axios from "axios";
-import SEO from "../components/SEO";
 
 const ProductDetailPage = () => {
   const { productId } = useParams();
@@ -240,33 +239,6 @@ const ProductDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="product-detail-page">
-      <SEO
-        title={`${product.name} Ghana Jersey`}
-        description={`${product.name} from ${product.vendor_name || "GhanaJersey.co"}: shop this Ghana jersey and Black Stars jersey-inspired design with sizing, price, and shipping details.`}
-        canonicalPath={`/products/${product.product_id}`}
-        image={product.images?.[0]}
-        type="product"
-        keywords={`ghana jersey, black stars jersey, ${product.name.toLowerCase()}, ${product.category}`}
-        jsonLd={{
-          "@context": "https://schema.org",
-          "@type": "Product",
-          name: product.name,
-          description: product.description,
-          image: product.images || [],
-          sku: product.product_id,
-          brand: {
-            "@type": "Brand",
-            name: product.vendor_name || "GhanaJersey.co"
-          },
-          offers: {
-            "@type": "Offer",
-            availability: product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-            priceCurrency: product.price_ghs ? "GHS" : (product.currency || "USD"),
-            price: product.price_ghs || product.price,
-            url: `${window.location.origin}/products/${product.product_id}`
-          }
-        }}
-      />
       <Header forceLight={true} stickyAnnouncement={true} />
 
       {/* Breadcrumb */}

@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Minus, Plus, X, ShoppingBag } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Header, Footer } from "./LandingPage";
-import { useCart } from "../App";
+import { useAuth, useCart } from "../App";
 import { useLocalization } from "../localization";
 
 const CartPage = () => {
+  const { user } = useAuth();
   const { cart, updateCartItem, removeFromCart, loading } = useCart();
-  const { isGhana, formatPrice } = useLocalization();
+  const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
   const navigate = useNavigate();
 
   // Get the correct price based on location
@@ -20,13 +22,16 @@ const CartPage = () => {
 
   // Calculate totals based on location
   const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
-  const formatLocalizedAmount = (amount) => formatPrice(amount, isGhana ? amount : null);
 
   const handleQuantityChange = async (productId, size, newQuantity) => {
     await updateCartItem(productId, newQuantity, size);
   };
 
   const handleCheckout = () => {
+    if (!user) {
+      navigate("/auth", { state: { from: { pathname: "/checkout" } } });
+      return;
+    }
     navigate("/checkout");
   };
 
@@ -118,7 +123,7 @@ const CartPage = () => {
                 <div className="space-y-4 mb-6">
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
-                    <span>{formatLocalizedAmount(subtotal)}</span>
+                    <span>{formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}</span>
                   </div>
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping</span>
@@ -130,7 +135,7 @@ const CartPage = () => {
                   <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
                     <span className="text-xl font-medium" data-testid="cart-total">
-                      {formatLocalizedAmount(subtotal)}
+                      {formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}
                     </span>
                   </div>
                   {isGhana && (

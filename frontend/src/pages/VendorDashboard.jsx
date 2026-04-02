@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { 
   Package, Plus, Edit2, Trash2, Eye, Clock, CheckCircle, XCircle, 
   ShoppingBag, DollarSign, TrendingUp, AlertTriangle, Copy, Pause, Play,
-  Truck, CreditCard, HelpCircle, FileText, MessageSquare, Percent, ThumbsUp, X
+  Truck, CreditCard, HelpCircle, FileText, MessageSquare, Percent, ThumbsUp
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -16,11 +16,6 @@ import { Header, Footer } from "./LandingPage";
 import { useAuth, API } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
-
-const IMAGE_FORMAT_HELP = "JPG, JPEG, PNG, WEBP";
-const MAX_IMAGE_SIZE_MB = 5;
-const PRODUCT_MIN_SIZE = "1200 x 1500 px";
-const PRODUCT_RECOMMENDED_SIZE = "1600 x 2000 px";
 
 const VendorDashboard = () => {
   const { user, token } = useAuth();
@@ -35,8 +30,6 @@ const VendorDashboard = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [uploadingImageIndex, setUploadingImageIndex] = useState(null);
-  const [dismissedNotifications, setDismissedNotifications] = useState([]);
 
   // Product form state
   const [productForm, setProductForm] = useState({
@@ -78,12 +71,6 @@ const VendorDashboard = () => {
   useEffect(() => {
     checkVendorStatusAndFetch();
   }, [token]);
-
-  useEffect(() => {
-    if (!user?.user_id) return;
-    const stored = JSON.parse(localStorage.getItem(`vendor_notifications_closed_${user.user_id}`) || "[]");
-    setDismissedNotifications(Array.isArray(stored) ? stored : []);
-  }, [user?.user_id]);
 
   const checkVendorStatusAndFetch = async () => {
     if (!token) return;
@@ -146,16 +133,9 @@ const VendorDashboard = () => {
 
   const handleSubmitProduct = async (e) => {
     e.preventDefault();
-
-    const uploadedImages = productForm.images.filter(img => img.trim() !== "");
     
     if (!productForm.name || !productForm.price || !productForm.price_ghs || !productForm.description) {
       toast.error("Please fill in all required fields including both USD and GHS prices");
-      return;
-    }
-
-    if (uploadedImages.length === 0) {
-      toast.error("Please upload at least one product image to storage");
       return;
     }
 
@@ -165,7 +145,7 @@ const VendorDashboard = () => {
         price: parseFloat(productForm.price),
         price_ghs: parseFloat(productForm.price_ghs),
         stock: parseInt(productForm.stock) || 0,
-        images: uploadedImages,
+        images: productForm.images.filter(img => img.trim() !== ""),
         allows_customization: productForm.allows_customization,
         customization_price: productForm.allows_customization ? parseFloat(productForm.customization_price) || 0 : 0,
         customization_price_ghs: productForm.allows_customization && productForm.customization_price_ghs 
@@ -241,73 +221,6 @@ const VendorDashboard = () => {
       fetchData();
     } catch (error) {
       toast.error("Failed to update stock");
-    }
-  };
-
-  const handleUploadProductImage = async (index, file) => {
-    if (!file) return;
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error(`Allowed formats: ${IMAGE_FORMAT_HELP}`);
-      return;
-    }
-    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
-      toast.error(`Image size must be ${MAX_IMAGE_SIZE_MB}MB or less`);
-      return;
-    }
-
-    const uploadData = new FormData();
-    uploadData.append("file", file);
-    setUploadingImageIndex(index);
-
-    try {
-      const res = await axios.post(`${API}/upload/product-image?slot_index=${index}`, uploadData, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      setProductForm((prev) => {
-        const newImages = [...prev.images];
-        newImages[index] = res.data.url;
-        return { ...prev, images: newImages };
-      });
-      toast.success("Image uploaded to storage");
-    } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to upload image");
-    } finally {
-      setUploadingImageIndex(null);
-    }
-  };
-
-  const handleRemoveProductImage = async (index) => {
-    const imagePath = productForm.images[index];
-    if (!imagePath) {
-      setProductForm((prev) => {
-        const nextImages = [...prev.images];
-        nextImages[index] = "";
-        return { ...prev, images: nextImages };
-      });
-      return;
-    }
-
-    try {
-      toast.loading("Removing image...", { id: `remove-product-image-${index}` });
-      await axios.delete(`${API}/upload/file`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { path: imagePath }
-      });
-
-      setProductForm((prev) => {
-        let nextImages = prev.images.filter((_, currentIndex) => currentIndex !== index);
-        if (nextImages.length === 0) {
-          nextImages = [""];
-        }
-        return { ...prev, images: nextImages };
-      });
-      toast.success("Image removed", { id: `remove-product-image-${index}` });
-    } catch (error) {
-      toast.error(error.response?.data?.detail || "Failed to remove image", { id: `remove-product-image-${index}` });
     }
   };
 
@@ -427,36 +340,6 @@ const VendorDashboard = () => {
       case "cancelled": return "bg-ghana-red/10 text-ghana-red";
       default: return "bg-gray-100 text-muted-text";
     }
-  };
-
-  const productNotifications = [...products]
-    .filter((product) => ["approved", "rejected"].includes(product.status))
-    .filter((product) => !dismissedNotifications.includes(product.product_id))
-    .sort((a, b) => new Date(b.reviewed_at || b.created_at || 0) - new Date(a.reviewed_at || a.created_at || 0))
-    .slice(0, 6);
-
-  const formatNotificationTime = (value) => {
-    if (!value) return "Recently";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Recently";
-    return date.toLocaleString();
-  };
-
-  const dismissNotification = (productId) => {
-    if (!user?.user_id) return;
-    const nextDismissed = [...new Set([...dismissedNotifications, productId])];
-    setDismissedNotifications(nextDismissed);
-    localStorage.setItem(`vendor_notifications_closed_${user.user_id}`, JSON.stringify(nextDismissed));
-  };
-
-  const formatCurrencyBreakdown = (breakdown, fallbackValue, fallbackCurrency = "USD") => {
-    if (breakdown && Object.keys(breakdown).length > 0) {
-      return Object.entries(breakdown)
-        .sort(([currencyA], [currencyB]) => currencyA.localeCompare(currencyB))
-        .map(([currency, amount]) => `${currency} ${Number(amount || 0).toFixed(2)}`)
-        .join(" • ");
-    }
-    return `${fallbackCurrency} ${Number(fallbackValue || 0).toFixed(2)}`;
   };
 
   if (loading) {
@@ -659,57 +542,20 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Product Images (Saved to R2)</Label>
-                  <div className="mt-3 mb-4 border border-ashanti-gold/30 bg-ashanti-gold/5 p-4">
-                    <p className="font-body text-xs uppercase tracking-[0.2em] text-ashanti-gold mb-2">Product Image Rules</p>
-                    <p className="font-body text-sm text-muted-text">The first 2 product images are required and must show the jersey on a clean white background for storefront consistency.</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-sm">
-                      <div className="border border-black/10 bg-white p-3">
-                        <p className="font-body font-semibold">Required images</p>
-                        <p className="font-body text-muted-text mt-1">1. Front view on white background</p>
-                        <p className="font-body text-muted-text">2. Back view on white background</p>
-                      </div>
-                      <div className="border border-black/10 bg-white p-3">
-                        <p className="font-body font-semibold">Technical specs</p>
-                        <p className="font-body text-muted-text mt-1">Formats: {IMAGE_FORMAT_HELP}</p>
-                        <p className="font-body text-muted-text">Max size: {MAX_IMAGE_SIZE_MB}MB per image</p>
-                        <p className="font-body text-muted-text">Minimum: {PRODUCT_MIN_SIZE}</p>
-                        <p className="font-body text-muted-text">Recommended: {PRODUCT_RECOMMENDED_SIZE}</p>
-                        <p className="font-body text-muted-text">Aspect ratio: 4:5</p>
-                      </div>
-                    </div>
-                    <p className="font-body text-xs text-muted-text mt-3">Additional detail or lifestyle images may use other backgrounds, but the first two uploads must stay white-background and full-jersey.</p>
-                  </div>
+                  <Label className="font-body text-sm uppercase tracking-wider">Image URLs (Front & Back)</Label>
+                  <p className="font-body text-xs text-muted-text mb-2">Add front image first, then back for hover effect</p>
                   {productForm.images.map((img, index) => (
-                    <div key={index} className="mt-2 space-y-2 border border-black/10 p-3">
-                      <p className="font-body text-xs uppercase tracking-wider text-muted-text">
-                        {index === 0 ? "Required: Front view on white background" : index === 1 ? "Required: Back view on white background" : `Optional image ${index + 1}`}
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleUploadProductImage(index, e.target.files?.[0])}
-                          className="flex-1"
-                        />
-                        {uploadingImageIndex === index && (
-                          <span className="font-body text-xs text-muted-text">Uploading...</span>
-                        )}
-                      </div>
-                      {img && (
-                        <div className="flex items-center gap-3">
-                          <img src={img} alt={`Product ${index + 1}`} className="w-20 h-20 object-cover border border-black/10" />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRemoveProductImage(index)}
-                          >
-                            <Trash2 size={14} className="mr-1" /> Remove
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                    <Input
+                      key={index}
+                      value={img}
+                      onChange={(e) => {
+                        const newImages = [...productForm.images];
+                        newImages[index] = e.target.value;
+                        setProductForm({...productForm, images: newImages});
+                      }}
+                      placeholder={index === 0 ? "Front image URL" : "Back image URL (for hover)"}
+                      className="mt-2"
+                    />
                   ))}
                   <Button
                     type="button"
@@ -779,41 +625,6 @@ const VendorDashboard = () => {
           </Dialog>
         </div>
 
-        {productNotifications.length > 0 && (
-          <div className="mb-8 bg-white border border-black/10 p-6">
-            <h2 className="font-heading text-lg tracking-wide uppercase mb-4">Product Notifications</h2>
-            <div className="space-y-3">
-              {productNotifications.map((product) => (
-                <div key={`notification-${product.product_id}`} className="flex items-start justify-between gap-4 border border-black/10 p-4">
-                  <div>
-                    <p className="font-body text-sm font-medium">{product.name}</p>
-                    <p className="font-body text-xs text-muted-text">Product ID: {product.product_id}</p>
-                    <p className="font-body text-xs text-muted-text mt-1">
-                      {product.status === "approved"
-                        ? "This product has been approved and can appear in the shop."
-                        : "This product was reviewed and is currently rejected."}
-                    </p>
-                  </div>
-                  <div className="text-right flex items-start gap-3">
-                    <div>
-                      {getStatusBadge(product.status)}
-                      <p className="font-body text-xs text-muted-text mt-2">{formatNotificationTime(product.reviewed_at || product.created_at)}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => dismissNotification(product.product_id)}
-                      className="text-muted-text hover:text-black"
-                      aria-label={`Dismiss notification for ${product.name}`}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Financial Overview */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <div className="bg-black text-white p-5">
@@ -821,35 +632,35 @@ const VendorDashboard = () => {
               <DollarSign size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Total Revenue</span>
             </div>
-            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.revenue_breakdown, dashboard?.total_revenue)}</span>
+            <span className="font-body text-2xl font-medium">${dashboard?.total_revenue?.toFixed(2) || "0.00"}</span>
           </div>
           <div className="bg-ashanti-gold/10 border border-ashanti-gold/30 p-5">
             <div className="flex items-center gap-2 text-ashanti-gold mb-2">
               <Percent size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Platform Fee (15%)</span>
             </div>
-            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.platform_commission_breakdown, dashboard?.platform_commission)}</span>
+            <span className="font-body text-2xl font-medium">${dashboard?.platform_commission?.toFixed(2) || "0.00"}</span>
           </div>
           <div className="bg-ghana-green/10 border border-ghana-green/30 p-5">
             <div className="flex items-center gap-2 text-ghana-green mb-2">
               <CreditCard size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Net Earnings</span>
             </div>
-            <span className="font-body text-2xl font-medium text-ghana-green">{formatCurrencyBreakdown(dashboard?.net_earnings_breakdown, dashboard?.net_earnings)}</span>
+            <span className="font-body text-2xl font-medium text-ghana-green">${dashboard?.net_earnings?.toFixed(2) || "0.00"}</span>
           </div>
           <div className="bg-white border border-black/10 p-5">
             <div className="flex items-center gap-2 text-muted-text mb-2">
               <Clock size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Pending Payout</span>
             </div>
-            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.pending_payout_breakdown, dashboard?.pending_payout)}</span>
+            <span className="font-body text-2xl font-medium">${dashboard?.pending_payout?.toFixed(2) || "0.00"}</span>
           </div>
           <div className="bg-white border border-black/10 p-5">
             <div className="flex items-center gap-2 text-muted-text mb-2">
               <CheckCircle size={14} />
               <span className="font-body text-xs uppercase tracking-wider">Paid Out</span>
             </div>
-            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.paid_payout_breakdown, dashboard?.paid_payout)}</span>
+            <span className="font-body text-2xl font-medium">${dashboard?.paid_payout?.toFixed(2) || "0.00"}</span>
           </div>
         </div>
 
@@ -873,7 +684,7 @@ const VendorDashboard = () => {
           </div>
           <div className="bg-white p-4 border border-black/10 text-center">
             <p className="font-body text-xs text-muted-text uppercase">Monthly Sales</p>
-            <p className="font-body text-xl font-medium">{formatCurrencyBreakdown(dashboard?.monthly_revenue_breakdown, dashboard?.monthly_revenue)}</p>
+            <p className="font-body text-xl font-medium">${dashboard?.monthly_revenue?.toFixed(2) || "0.00"}</p>
           </div>
           <div className="bg-white p-4 border border-black/10 text-center">
             <p className="font-body text-xs text-muted-text uppercase">Total Votes</p>
@@ -1012,7 +823,7 @@ const VendorDashboard = () => {
                             Size: {item.size} | Qty: {item.quantity}
                           </p>
                         </div>
-                        <p className="font-body text-sm font-medium">{`${item.currency || order.currency || "USD"} ${(item.price * item.quantity).toFixed(2)}`}</p>
+                        <p className="font-body text-sm font-medium">${(item.price * item.quantity).toFixed(2)}</p>
                       </div>
                     ))}
                   </div>
@@ -1022,7 +833,7 @@ const VendorDashboard = () => {
                       Payment: <span className={order.payment_status === 'paid' ? 'text-ghana-green' : 'text-ashanti-gold'}>{order.payment_status}</span>
                     </p>
                     <p className="font-body text-lg font-semibold">
-                      Total: {(order.currency || "USD")} {order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
+                      Total: ${order.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -1061,12 +872,10 @@ const VendorDashboard = () => {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <h3 className="font-heading text-sm tracking-wide">{product.name}</h3>
-                        <p className="font-body text-[11px] text-muted-text mt-1">Product ID: {product.product_id}</p>
                         {getStatusBadge(product.status)}
                       </div>
-                      <span className="font-body text-lg font-semibold">USD {Number(product.price || 0).toFixed(2)}</span>
+                      <span className="font-body text-lg font-semibold">${product.price}</span>
                     </div>
-                    <p className="font-body text-xs text-muted-text mb-2">GHS {Number(product.price_ghs || 0).toFixed(2)}</p>
                     <p className="font-body text-xs text-muted-text mb-3">
                       Stock: {product.stock} | Votes: {product.vote_count || 0}
                     </p>
@@ -1126,7 +935,7 @@ const VendorDashboard = () => {
                           <p className="font-body text-sm font-medium truncate">{product.name}</p>
                           <p className="font-body text-xs text-muted-text">{product.total_sold} sold</p>
                         </div>
-                        <p className="font-body text-sm font-semibold text-ghana-green">{formatCurrencyBreakdown(product.revenue_breakdown, product.total_revenue)}</p>
+                        <p className="font-body text-sm font-semibold text-ghana-green">${product.total_revenue?.toFixed(2)}</p>
                       </div>
                     ))}
                   </div>
