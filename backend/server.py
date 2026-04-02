@@ -199,7 +199,7 @@ def normalize_image_url(image: str) -> str:
 def normalize_product_document(product: dict) -> dict:
     product["images"] = [normalize_image_url(image) for image in product.get("images", []) if image]
     product["slug"] = product.get("slug") or slugify_text(product.get("name") or product.get("product_id"))
-    product["url"] = f"{get_frontend_base_url()}/products/{product['slug']}"
+    product["url"] = f"{get_frontend_base_url()}/products/{product['slug']}/{product.get('product_id') or product['slug']}"
     product["meta_title"] = product.get("meta_title") or f"{product.get('name', 'Ghana Jersey')} | Ghana Jersey"
     product["meta_description"] = product.get("meta_description") or (
         f"Buy {product.get('name', 'this Ghana jersey')} on GhanaJersey.co. "
@@ -2399,15 +2399,15 @@ async def get_vendor_public_profile(vendor_id: str):
         "product_count": product_count
     }
 
-@api_router.get("/products/{product_slug}")
-async def get_product(product_slug: str, request: Request):
+@api_router.get("/products/{product_lookup}")
+async def get_product(product_lookup: str, request: Request):
     product = await db.products.find_one(
-        {"slug": product_slug, "status": "approved"},
+        {"slug": product_lookup, "status": "approved"},
         {"_id": 0}
     )
     if not product:
         product = await db.products.find_one(
-            {"product_id": product_slug, "status": "approved"},
+            {"product_id": product_lookup, "status": "approved"},
             {"_id": 0}
         )
     
@@ -3947,7 +3947,7 @@ async def sitemap_xml(request: Request):
         lastmod = product.get("updated_at") or product.get("created_at")
         lastmod_xml = f"<lastmod>{xml_escape(lastmod)}</lastmod>" if lastmod else ""
         url_entries.append(
-            f"<url><loc>{xml_escape(base_url + '/products/' + (product.get('slug') or slugify_text(product.get('name') or product['product_id'])))}</loc>{lastmod_xml}<changefreq>weekly</changefreq><priority>0.8</priority></url>"
+            f"<url><loc>{xml_escape(base_url + '/products/' + (product.get('slug') or slugify_text(product.get('name') or product['product_id'])) + '/' + product['product_id'])}</loc>{lastmod_xml}<changefreq>weekly</changefreq><priority>0.8</priority></url>"
         )
 
     for blog in blogs:
