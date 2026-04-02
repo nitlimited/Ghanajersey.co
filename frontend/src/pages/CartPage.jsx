@@ -1,15 +1,13 @@
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Minus, Plus, X, ShoppingBag } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Header, Footer } from "./LandingPage";
-import { useAuth, useCart } from "../App";
+import { useCart, getProductPath } from "../App";
 import { useLocalization } from "../localization";
 
 const CartPage = () => {
-  const { user } = useAuth();
   const { cart, updateCartItem, removeFromCart, loading } = useCart();
-  const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
+  const { isGhana, formatPrice } = useLocalization();
   const navigate = useNavigate();
 
   // Get the correct price based on location
@@ -22,16 +20,13 @@ const CartPage = () => {
 
   // Calculate totals based on location
   const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
+  const formatLocalizedAmount = (amount) => formatPrice(amount, isGhana ? amount : null);
 
   const handleQuantityChange = async (productId, size, newQuantity) => {
     await updateCartItem(productId, newQuantity, size);
   };
 
   const handleCheckout = () => {
-    if (!user) {
-      navigate("/auth", { state: { from: { pathname: "/checkout" } } });
-      return;
-    }
     navigate("/checkout");
   };
 
@@ -62,7 +57,7 @@ const CartPage = () => {
             <div className="lg:col-span-2 space-y-6">
               {cart.items.map((item, index) => (
                 <div key={`${item.product_id}-${item.size}`} className="flex gap-6 pb-6 border-b border-black/10" data-testid={`cart-item-${index}`}>
-                  <Link to={`/products/${item.product_id}`} className="w-32 h-40 flex-shrink-0 overflow-hidden bg-gray-100">
+                  <Link to={getProductPath(item)} className="w-32 h-40 flex-shrink-0 overflow-hidden bg-gray-100">
                     <img
                       src={item.image || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=300"}
                       alt={item.name}
@@ -72,7 +67,7 @@ const CartPage = () => {
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <div>
-                        <Link to={`/products/${item.product_id}`} className="font-heading text-lg tracking-wide uppercase hover:text-ashanti-gold transition-colors">
+                        <Link to={getProductPath(item)} className="font-heading text-lg tracking-wide uppercase hover:text-ashanti-gold transition-colors">
                           {item.name}
                         </Link>
                         <p className="font-body text-sm text-muted-text mt-1">Size: {item.size}</p>
@@ -123,7 +118,7 @@ const CartPage = () => {
                 <div className="space-y-4 mb-6">
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
-                    <span>{formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}</span>
+                    <span>{formatLocalizedAmount(subtotal)}</span>
                   </div>
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping</span>
@@ -135,7 +130,7 @@ const CartPage = () => {
                   <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
                     <span className="text-xl font-medium" data-testid="cart-total">
-                      {formatPrice(isGhana ? subtotal / 15.38 : subtotal, isGhana ? subtotal : null)}
+                      {formatLocalizedAmount(subtotal)}
                     </span>
                   </div>
                   {isGhana && (

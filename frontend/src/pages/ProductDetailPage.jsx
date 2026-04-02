@@ -7,13 +7,14 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Header, Footer, ProductCard, MobileBottomNav } from "./LandingPage";
-import { useAuth, useCart, API } from "../App";
+import { useAuth, useCart, API, getProductPath } from "../App";
 import { useLocalization } from "../localization";
 import { toast } from "sonner";
 import axios from "axios";
+import SEO from "../components/SEO";
 
 const ProductDetailPage = () => {
-  const { productId } = useParams();
+  const { productId: productSlug } = useParams();
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [designerProducts, setDesignerProducts] = useState([]);
@@ -97,7 +98,7 @@ const ProductDetailPage = () => {
     const fetchProduct = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`${API}/products/${productId}`);
+        const response = await axios.get(`${API}/products/${productSlug}`);
         setProduct(response.data);
         setVoteCount(response.data.vote_count || 0);
         if (response.data.sizes?.length > 0) {
@@ -110,22 +111,22 @@ const ProductDetailPage = () => {
         // Check if user has already voted (using device fingerprint)
         const fingerprint = getDeviceFingerprint();
         try {
-          const voteCheckRes = await axios.get(`${API}/products/${productId}/check-vote?device_fingerprint=${fingerprint}`);
+          const voteCheckRes = await axios.get(`${API}/products/${response.data.product_id}/check-vote?device_fingerprint=${fingerprint}`);
           setHasVoted(voteCheckRes.data.has_voted);
         } catch (e) {
           // If check fails, also check localStorage
           const votedProducts = JSON.parse(localStorage.getItem('bst_voted_products') || '[]');
-          setHasVoted(votedProducts.includes(productId));
+          setHasVoted(votedProducts.includes(response.data.product_id));
         }
 
         // Fetch related products (same category)
         const relatedResponse = await axios.get(`${API}/products?category=${response.data.category}&limit=4`);
-        setRelatedProducts(relatedResponse.data.filter(p => p.product_id !== productId).slice(0, 4));
+        setRelatedProducts(relatedResponse.data.filter(p => p.product_id !== response.data.product_id).slice(0, 4));
 
         // Fetch more from this designer
         if (response.data.vendor_id) {
           const designerResponse = await axios.get(`${API}/vendor/${response.data.vendor_id}/products?limit=4`);
-          setDesignerProducts(designerResponse.data.filter(p => p.product_id !== productId).slice(0, 4));
+          setDesignerProducts(designerResponse.data.filter(p => p.product_id !== response.data.product_id).slice(0, 4));
         }
       } catch (error) {
         console.error("Failed to fetch product:", error);
@@ -136,19 +137,19 @@ const ProductDetailPage = () => {
 
     fetchProduct();
     window.scrollTo(0, 0);
-  }, [productId]);
+  }, [productSlug]);
 
   const handleVote = async () => {
     try {
       const fingerprint = getDeviceFingerprint();
-      await axios.post(`${API}/products/${productId}/vote`, { device_fingerprint: fingerprint });
+      await axios.post(`${API}/products/${product.product_id}/vote`, { device_fingerprint: fingerprint });
       setVoteCount(prev => prev + 1);
       setHasVoted(true);
       
       // Also store in localStorage as backup
       const votedProducts = JSON.parse(localStorage.getItem('bst_voted_products') || '[]');
-      if (!votedProducts.includes(productId)) {
-        votedProducts.push(productId);
+      if (!votedProducts.includes(product.product_id)) {
+        votedProducts.push(product.product_id);
         localStorage.setItem('bst_voted_products', JSON.stringify(votedProducts));
       }
       
@@ -184,7 +185,7 @@ const ProductDetailPage = () => {
       price: product.customization_price || 0
     } : null;
     
-    await addToCart(productId, quantity, selectedSize, customization);
+    await addToCart(product.product_id, quantity, selectedSize, customization);
   };
 
   const handleAddToWishlist = async () => {
@@ -194,7 +195,7 @@ const ProductDetailPage = () => {
     }
 
     try {
-      await axios.post(`${API}/wishlist/add`, { product_id: productId }, {
+      await axios.post(`${API}/wishlist/add`, { product_id: product.product_id }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setIsWishlisted(true);
@@ -239,6 +240,33 @@ const ProductDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="product-detail-page">
+      <SEO
+        title={product.meta_title || `${product.name} | Ghana Jersey`}
+        description={product.meta_description || `${product.name} from ${product.vendor_name || "GhanaJersey.co"}: shop this Ghana jersey and Black Stars jersey-inspired design with sizing, price, and shipping details.`}
+        canonicalPath={getProductPath(product)}
+        image={product.images?.[0]}
+        type="product"
+        keywords={["ghana jersey", "black stars jersey", product.name.toLowerCase(), product.category, ...(product.focus_keywords || [])].join(", ")}
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: product.name,
+          description: product.description,
+          image: product.images || [],
+          sku: product.product_id,
+          brand: {
+            "@type": "Brand",
+            name: product.vendor_name || "GhanaJersey.co"
+          },
+          offers: {
+            "@type": "Offer",
+            availability: product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            priceCurrency: product.price_ghs ? "GHS" : (product.currency || "USD"),
+            price: product.price_ghs || product.price,
+            url: `${window.location.origin}${getProductPath(product)}`
+          }
+        }}
+      />
       <Header forceLight={true} stickyAnnouncement={true} />
 
       {/* Breadcrumb */}

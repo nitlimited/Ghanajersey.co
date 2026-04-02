@@ -4,7 +4,7 @@ import { X, Plus, ShoppingBag, Star, ChevronDown } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Header, Footer } from "./LandingPage";
-import { useCart, API } from "../App";
+import { useCart, API, getProductPath } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -102,7 +102,7 @@ const ComparePage = () => {
         </p>
 
         {/* Product Selection */}
-        <div className="grid grid-cols-2 gap-8 mb-12">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8 mb-12">
           {[0, 1].map((index) => (
             <div key={index} className="bg-white border border-black/10 p-6">
               {selectedProducts[index] ? (
@@ -115,7 +115,7 @@ const ComparePage = () => {
                     <X size={20} />
                   </button>
                   
-                  <Link to={`/products/${selectedProducts[index].product_id}`}>
+                  <Link to={getProductPath(selectedProducts[index])}>
                     <div className="aspect-square bg-gray-100 overflow-hidden mb-4">
                       <img
                         src={selectedProducts[index].images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=400"}
@@ -161,14 +161,14 @@ const ComparePage = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-black/20">
+                <div className="min-h-[340px] md:min-h-[420px] flex flex-col items-center justify-center border-2 border-dashed border-black/20 px-4 text-center">
                   <Plus size={48} className="text-muted-text mb-4" />
                   <p className="font-body text-sm text-muted-text mb-4">Select a jersey</p>
                   <Select onValueChange={(value) => handleSelectProduct(index, value)}>
-                    <SelectTrigger className="w-48 rounded-none" data-testid={`select-product-${index}`}>
+                    <SelectTrigger className="w-full max-w-sm rounded-none min-h-[52px]" data-testid={`select-product-${index}`}>
                       <SelectValue placeholder="Choose jersey" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-64">
+                    <SelectContent className="max-h-64 w-[--radix-select-trigger-width]">
                       {allProducts.map(product => (
                         <SelectItem 
                           key={product.product_id} 
@@ -188,30 +188,48 @@ const ComparePage = () => {
 
         {/* Comparison Table */}
         {selectedProducts[0] && selectedProducts[1] && (
-          <div className="bg-white border border-black/10 overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-black/10 bg-black text-white">
-                  <th className="font-body text-sm font-semibold text-left p-4 w-1/3">Specification</th>
-                  <th className="font-body text-sm font-semibold text-center p-4 w-1/3">{selectedProducts[0].name}</th>
-                  <th className="font-body text-sm font-semibold text-center p-4 w-1/3">{selectedProducts[1].name}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {compareFields.map((field, index) => (
-                  <tr key={field.key} className={index % 2 === 0 ? "bg-bone-white" : "bg-white"}>
-                    <td className="font-body text-sm font-semibold p-4">{field.label}</td>
-                    <td className="font-body text-sm text-center p-4">
-                      {field.format(selectedProducts[0])}
-                    </td>
-                    <td className="font-body text-sm text-center p-4">
-                      {field.format(selectedProducts[1])}
-                    </td>
+          <>
+            <div className="hidden md:block bg-white border border-black/10 overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-black/10 bg-black text-white">
+                    <th className="font-body text-sm font-semibold text-left p-4 w-1/3">Specification</th>
+                    <th className="font-body text-sm font-semibold text-center p-4 w-1/3">{selectedProducts[0].name}</th>
+                    <th className="font-body text-sm font-semibold text-center p-4 w-1/3">{selectedProducts[1].name}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {compareFields.map((field, index) => (
+                    <tr key={field.key} className={index % 2 === 0 ? "bg-bone-white" : "bg-white"}>
+                      <td className="font-body text-sm font-semibold p-4">{field.label}</td>
+                      <td className="font-body text-sm text-center p-4">
+                        {field.format(selectedProducts[0])}
+                      </td>
+                      <td className="font-body text-sm text-center p-4">
+                        {field.format(selectedProducts[1])}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="md:hidden space-y-4">
+              {compareFields.map((field) => (
+                <div key={field.key} className="bg-white border border-black/10 p-5">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text mb-3">{field.label}</p>
+                  <div className="grid grid-cols-1 gap-4">
+                    {selectedProducts.map((product, productIndex) => (
+                      <div key={`${field.key}-${productIndex}`} className="border border-black/10 bg-bone-white p-4">
+                        <p className="font-heading text-sm mb-2">{product.name}</p>
+                        <p className="font-body text-sm">{field.format(product)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Empty State */}

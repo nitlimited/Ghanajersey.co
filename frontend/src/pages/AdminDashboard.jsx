@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Header, Footer } from "./LandingPage";
-import { useAuth, API } from "../App";
+import { useAuth, API, ADMIN_PORTAL_PATH } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -126,11 +126,41 @@ const AdminDashboard = () => {
       case "paid": return "text-ghana-green bg-ghana-green/10";
       case "pending": return "text-ashanti-gold bg-ashanti-gold/10";
       case "failed": return "text-ghana-red bg-ghana-red/10";
+      case "order_placed": return "text-slate-700 bg-slate-100";
       case "processing": return "text-blue-600 bg-blue-100";
       case "shipped": return "text-purple-600 bg-purple-100";
       case "delivered": return "text-ghana-green bg-ghana-green/10";
+      case "cancelled": return "text-ghana-red bg-ghana-red/10";
       default: return "text-muted-text bg-gray-100";
     }
+  };
+
+  const formatOrderStep = (status) => {
+    switch (status) {
+      case "order_placed": return "Order Placed";
+      case "processing": return "Processing";
+      case "shipped": return "Shipped";
+      case "delivered": return "Delivered";
+      case "cancelled": return "Cancelled";
+      default: return status || "Unknown";
+    }
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+    return date.toLocaleString();
+  };
+
+  const formatCurrencyBreakdown = (breakdown, fallbackValue, fallbackCurrency = "USD") => {
+    if (breakdown && Object.keys(breakdown).length > 0) {
+      return Object.entries(breakdown)
+        .sort(([currencyA], [currencyB]) => currencyA.localeCompare(currencyB))
+        .map(([currency, amount]) => `${currency} ${Number(amount || 0).toFixed(2)}`)
+        .join(" • ");
+    }
+    return `${fallbackCurrency} ${Number(fallbackValue || 0).toFixed(2)}`;
   };
 
   if (loading) {
@@ -157,6 +187,11 @@ const AdminDashboard = () => {
             Admin Dashboard
           </h1>
           <p className="font-body text-muted-text mt-2">Manage your marketplace</p>
+          <div className="mt-4">
+            <Link to={`${ADMIN_PORTAL_PATH}/blog`}>
+              <Button variant="outline" className="border-black">Open Blog Editor</Button>
+            </Link>
+          </div>
         </div>
 
         {/* Revenue Stats Grid */}
@@ -166,21 +201,21 @@ const AdminDashboard = () => {
               <DollarSign size={16} />
               <span className="font-body text-xs uppercase tracking-wider">Total Revenue</span>
             </div>
-            <span className="font-body text-2xl font-medium">${dashboard?.total_revenue?.toFixed(2)}</span>
+            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.revenue_breakdown, dashboard?.total_revenue)}</span>
           </div>
           <div className="bg-ashanti-gold p-6 border border-ashanti-gold">
             <div className="flex items-center gap-2 text-black/60 mb-2">
               <Percent size={16} />
               <span className="font-body text-xs uppercase tracking-wider">Platform Commission (15%)</span>
             </div>
-            <span className="font-body text-2xl font-medium">${dashboard?.platform_commission?.toFixed(2)}</span>
+            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.platform_commission_breakdown, dashboard?.platform_commission)}</span>
           </div>
           <div className="bg-white p-6 border border-black/10">
             <div className="flex items-center gap-2 text-muted-text mb-2">
               <CreditCard size={16} />
               <span className="font-body text-xs uppercase tracking-wider">Vendor Earnings</span>
             </div>
-            <span className="font-body text-2xl font-medium">${dashboard?.vendor_earnings_total?.toFixed(2)}</span>
+            <span className="font-body text-2xl font-medium">{formatCurrencyBreakdown(dashboard?.vendor_earnings_breakdown, dashboard?.vendor_earnings_total)}</span>
           </div>
           <div className="bg-white p-6 border border-black/10">
             <div className="flex items-center gap-2 text-muted-text mb-2">
@@ -377,23 +412,23 @@ const AdminDashboard = () => {
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div>
                       <p className="font-body text-xs text-muted-text uppercase tracking-wider">Total Revenue</p>
-                      <p className="font-body text-lg font-medium">${vendor.total_revenue.toFixed(2)}</p>
+                      <p className="font-body text-lg font-medium">{formatCurrencyBreakdown(vendor.revenue_breakdown, vendor.total_revenue)}</p>
                     </div>
                     <div>
                       <p className="font-body text-xs text-muted-text uppercase tracking-wider">Platform Fee (15%)</p>
-                      <p className="font-body text-lg font-medium text-ashanti-gold">${vendor.platform_commission.toFixed(2)}</p>
+                      <p className="font-body text-lg font-medium text-ashanti-gold">{formatCurrencyBreakdown(vendor.platform_commission_breakdown, vendor.platform_commission)}</p>
                     </div>
                     <div>
                       <p className="font-body text-xs text-muted-text uppercase tracking-wider">Net Earnings</p>
-                      <p className="font-body text-lg font-medium text-ghana-green">${vendor.net_earnings.toFixed(2)}</p>
+                      <p className="font-body text-lg font-medium text-ghana-green">{formatCurrencyBreakdown(vendor.net_earnings_breakdown, vendor.net_earnings)}</p>
                     </div>
                     <div>
                       <p className="font-body text-xs text-muted-text uppercase tracking-wider">Pending Payout</p>
-                      <p className="font-body text-lg font-medium">${vendor.pending_payout.toFixed(2)}</p>
+                      <p className="font-body text-lg font-medium">{formatCurrencyBreakdown(vendor.pending_payout_breakdown, vendor.pending_payout)}</p>
                     </div>
                     <div>
                       <p className="font-body text-xs text-muted-text uppercase tracking-wider">Paid Out</p>
-                      <p className="font-body text-lg font-medium">${vendor.paid_payout.toFixed(2)}</p>
+                      <p className="font-body text-lg font-medium">{formatCurrencyBreakdown(vendor.paid_payout_breakdown, vendor.paid_payout)}</p>
                     </div>
                   </div>
 
@@ -426,7 +461,7 @@ const AdminDashboard = () => {
                             <img src={product.images?.[0]} alt={product.name} className="w-16 h-16 object-cover" />
                             <div className="flex-1 min-w-0">
                               <p className="font-body text-sm font-medium truncate">{product.name}</p>
-                              <p className="font-body text-xs text-muted-text">${product.price} • {product.stock} in stock</p>
+                              <p className="font-body text-xs text-muted-text">USD {Number(product.price || 0).toFixed(2)} • GHS {Number(product.price_ghs || 0).toFixed(2)} • {product.stock} in stock</p>
                               <span className={`text-xs ${product.status === 'approved' ? 'text-ghana-green' : 'text-ashanti-gold'}`}>
                                 {product.status}
                               </span>
@@ -492,13 +527,13 @@ const AdminDashboard = () => {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-black/10">
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Order ID</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Customer</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Items</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Total</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Payment</th>
-                    <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Confirmed</th>
+                    <tr className="border-b border-black/10">
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Order ID</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Customer</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Items & Vendor Progress</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Total</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Payment</th>
+                      <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Confirmed</th>
                     <th className="text-left font-body text-xs uppercase tracking-wider py-4 px-4">Status</th>
                   </tr>
                 </thead>
@@ -507,11 +542,44 @@ const AdminDashboard = () => {
                     <tr key={order.order_id} className="border-b border-black/5">
                       <td className="py-4 px-4 font-body text-sm">{order.order_id.slice(-8)}</td>
                       <td className="py-4 px-4">
-                        <p className="font-body text-sm">{order.shipping_address?.name || "N/A"}</p>
+                        <p className="font-body text-sm">{order.shipping_address?.full_name || order.shipping_address?.name || "N/A"}</p>
                         <p className="font-body text-xs text-muted-text">{order.shipping_address?.phone}</p>
+                        <p className="font-body text-xs text-muted-text mt-1">{formatDateTime(order.created_at)}</p>
                       </td>
-                      <td className="py-4 px-4 font-body text-sm">{order.items?.length || 0} items</td>
-                      <td className="py-4 px-4 font-body text-sm font-medium">${order.total?.toFixed(2)}</td>
+                      <td className="py-4 px-4">
+                        <div className="space-y-3 min-w-[320px]">
+                          {order.items?.map((item, index) => (
+                            <div key={`${order.order_id}-${item.product_id}-${index}`} className="border border-black/10 bg-white p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-body text-sm font-medium">{item.name}</p>
+                                  <p className="font-body text-xs text-muted-text">
+                                    {item.vendor_name} • Size {item.size} • Qty {item.quantity}
+                                  </p>
+                                </div>
+                                <span className={`inline-block px-2 py-1 text-xs font-body whitespace-nowrap ${getStatusColor(item.processing_status)}`}>
+                                  {formatOrderStep(item.processing_status)}
+                                </span>
+                              </div>
+
+                              <div className="mt-3">
+                                <p className="font-body text-[11px] uppercase tracking-wider text-muted-text mb-2">Processing Timeline</p>
+                                <div className="space-y-2">
+                                  {(item.processing_history?.length ? item.processing_history : [{ status: "order_placed", timestamp: order.created_at }]).map((step, stepIndex) => (
+                                    <div key={`${order.order_id}-${item.product_id}-${stepIndex}`} className="flex items-center justify-between gap-3 text-xs">
+                                      <span className={`inline-block px-2 py-1 font-body ${getStatusColor(step.status)}`}>
+                                        {formatOrderStep(step.status)}
+                                      </span>
+                                      <span className="font-body text-muted-text">{formatDateTime(step.timestamp)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 font-body text-sm font-medium">{`${order.currency || "USD"} ${Number(order.total || 0).toFixed(2)}`}</td>
                       <td className="py-4 px-4">
                         <span className={`inline-block px-2 py-1 text-xs font-body ${getStatusColor(order.payment_status)}`}>
                           {order.payment_status}
@@ -792,6 +860,47 @@ const AdminDashboard = () => {
                     <span className="text-muted-text">Materials:</span>
                     <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.quality?.materials?.join(", ")?.replace(/_/g, " ")}</p>
                   </div>
+                </div>
+              </div>
+
+              <div className="border border-black/10 p-4">
+                <h3 className="font-heading text-sm uppercase tracking-wider mb-3">Payout Details</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-text">Method:</span>
+                    <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.payout?.payout_method || "Not provided"}</p>
+                  </div>
+                  {selectedOnboarding.onboarding_data?.payout?.payout_method === "momo" ? (
+                    <>
+                      <div>
+                        <span className="text-muted-text">MoMo Network:</span>
+                        <p className="font-medium capitalize">{selectedOnboarding.onboarding_data?.payout?.momo_network?.replace(/_/g, " ")}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-text">MoMo Number:</span>
+                        <p className="font-medium">{selectedOnboarding.onboarding_data?.payout?.momo_number}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-muted-text">Bank Name:</span>
+                        <p className="font-medium">{selectedOnboarding.onboarding_data?.payout?.bank_name || "Not provided"}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-text">Account Name:</span>
+                        <p className="font-medium">{selectedOnboarding.onboarding_data?.payout?.account_name || "Not provided"}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-text">Account Number:</span>
+                        <p className="font-medium">{selectedOnboarding.onboarding_data?.payout?.account_number || "Not provided"}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-text">Bank Branch:</span>
+                        <p className="font-medium">{selectedOnboarding.onboarding_data?.payout?.bank_branch || "Not provided"}</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

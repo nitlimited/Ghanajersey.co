@@ -18,11 +18,15 @@ import VendorDashboard from "./pages/VendorDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import WishlistPage from "./pages/WishlistPage";
 import SellYourJerseyPage from "./pages/SellYourJerseyPage";
+import AboutPage from "./pages/AboutPage";
 import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import ComparePage from "./pages/ComparePage";
 import VendorOnboarding from "./pages/VendorOnboarding";
 import PaymentCallbackPage from "./pages/PaymentCallbackPage";
+import BlogPage from "./pages/BlogPage";
+import BlogPostPage from "./pages/BlogPostPage";
+import AdminBlogPage from "./pages/AdminBlogPage";
 import { LocalizationProvider } from "./localization";
 import { UserActivityProvider } from "./context/UserActivityContext";
 import CookieConsent from "./components/CookieConsent";
@@ -31,6 +35,15 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 const API = BACKEND_URL.endsWith("/api")
   ? BACKEND_URL
   : `${BACKEND_URL}/api`;
+const normalizeAppPath = (value, fallback) => {
+  if (!value) return fallback;
+  const normalized = value.startsWith("/") ? value : `/${value}`;
+  return normalized.replace(/\/+$/, "") || fallback;
+};
+const ADMIN_PORTAL_PATH = normalizeAppPath(process.env.REACT_APP_ADMIN_PORTAL_PATH, "/control-room");
+const ADMIN_LOGIN_PATH = `${ADMIN_PORTAL_PATH}/login`;
+const GUEST_CART_KEY = "bst_guest_cart";
+const getProductPath = (product) => `/products/${product?.slug || product?.product_id || ""}`;
 
 // Auth Context
 const AuthContext = createContext(null);
@@ -96,6 +109,22 @@ const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const response = await axios.post(`${API}/auth/login`, { email, password });
+    if (response.data.requires_2fa) {
+      return response.data;
+    }
+
+    const { token: newToken, user: userData } = response.data;
+    localStorage.setItem("auth_token", newToken);
+    setToken(newToken);
+    setUser(userData);
+    return userData;
+  };
+
+  const verifyVendorLogin2FA = async (challengeId, code) => {
+    const response = await axios.post(`${API}/auth/login/verify-2fa`, {
+      challenge_id: challengeId,
+      code
+    });
     const { token: newToken, user: userData } = response.data;
     localStorage.setItem("auth_token", newToken);
     setToken(newToken);
@@ -139,7 +168,7 @@ const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout, setAuthData, checkAuth }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout, setAuthData, checkAuth, verifyVendorLogin2FA }}>
       {children}
     </AuthContext.Provider>
   );
@@ -151,14 +180,58 @@ const CartProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const { token } = useAuth();
 
+  const readGuestCart = useCallback(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(GUEST_CART_KEY) || "[]");
+      const items = Array.isArray(stored) ? stored : [];
+      const total = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
+      return { items, total };
+    } catch (error) {
+      return { items: [], total: 0 };
+    }
+  }, []);
+
+  const writeGuestCart = useCallback((items) => {
+    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
+    const total = items.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
+    setCart({ items, total });
+  }, []);
+
+  const loadProductForGuestCart = useCallback(async (productId) => {
+    const response = await axios.get(`${API}/products/${productId}`);
+    return response.data;
+  }, []);
+
+  const syncGuestCartToServer = useCallback(async (authToken) => {
+    const guestCart = readGuestCart();
+    if (!guestCart.items.length) {
+      return false;
+    }
+
+    for (const item of guestCart.items) {
+      await axios.post(`${API}/cart/add`, {
+        product_id: item.product_id,
+        quantity: item.quantity,
+        size: item.size,
+        customization: item.customization || null
+      }, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+    }
+
+    localStorage.removeItem(GUEST_CART_KEY);
+    return true;
+  }, [readGuestCart]);
+
   const fetchCart = useCallback(async () => {
     if (!token) {
-      setCart({ items: [], total: 0 });
+      setCart(readGuestCart());
       return;
     }
 
     try {
       setLoading(true);
+      await syncGuestCartToServer(token);
       const response = await axios.get(`${API}/cart`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -168,7 +241,7 @@ const CartProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, readGuestCart, syncGuestCartToServer]);
 
   useEffect(() => {
     fetchCart();
@@ -176,8 +249,43 @@ const CartProvider = ({ children }) => {
 
   const addToCart = async (productId, quantity, size, customization = null) => {
     if (!token) {
-      toast.error("Please login to add items to cart");
-      return false;
+      try {
+        const product = await loadProductForGuestCart(productId);
+        const guestCart = readGuestCart();
+        const nextItems = [...guestCart.items];
+        const existingIndex = nextItems.findIndex((item) =>
+          item.product_id === productId &&
+          item.size === size &&
+          JSON.stringify(item.customization || null) === JSON.stringify(customization || null)
+        );
+
+        if (existingIndex >= 0) {
+          nextItems[existingIndex] = {
+            ...nextItems[existingIndex],
+            quantity: nextItems[existingIndex].quantity + quantity
+          };
+        } else {
+          nextItems.push({
+            product_id: product.product_id,
+            slug: product.slug,
+            name: product.name,
+            image: product.images?.[0] || "",
+            price: product.price,
+            price_ghs: product.price_ghs,
+            quantity,
+            size,
+            vendor_id: product.vendor_id,
+            customization: customization || null
+          });
+        }
+
+        writeGuestCart(nextItems);
+        toast.success(customization ? "Customized jersey added to cart" : "Added to cart");
+        return true;
+      } catch (error) {
+        toast.error(error.response?.data?.detail || "Failed to add to cart");
+        return false;
+      }
     }
 
     try {
@@ -199,6 +307,15 @@ const CartProvider = ({ children }) => {
   };
 
   const updateCartItem = async (productId, quantity, size) => {
+    if (!token) {
+      const guestCart = readGuestCart();
+      const nextItems = guestCart.items
+        .map((item) => item.product_id === productId && item.size === size ? { ...item, quantity } : item)
+        .filter((item) => item.quantity > 0);
+      writeGuestCart(nextItems);
+      return;
+    }
+
     try {
       await axios.put(`${API}/cart/update`, { product_id: productId, quantity, size }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -210,6 +327,14 @@ const CartProvider = ({ children }) => {
   };
 
   const removeFromCart = async (productId, size) => {
+    if (!token) {
+      const guestCart = readGuestCart();
+      const nextItems = guestCart.items.filter((item) => !(item.product_id === productId && item.size === size));
+      writeGuestCart(nextItems);
+      toast.success("Removed from cart");
+      return;
+    }
+
     try {
       await axios.delete(`${API}/cart/item/${productId}/${size}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -222,6 +347,12 @@ const CartProvider = ({ children }) => {
   };
 
   const clearCart = async () => {
+    if (!token) {
+      localStorage.removeItem(GUEST_CART_KEY);
+      setCart({ items: [], total: 0 });
+      return;
+    }
+
     try {
       await axios.delete(`${API}/cart/clear`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -233,7 +364,7 @@ const CartProvider = ({ children }) => {
   };
 
   return (
-    <CartContext.Provider value={{ cart, loading, fetchCart, addToCart, updateCartItem, removeFromCart, clearCart }}>
+    <CartContext.Provider value={{ cart, loading, fetchCart, addToCart, updateCartItem, removeFromCart, clearCart, syncGuestCartToServer }}>
       {children}
     </CartContext.Provider>
   );
@@ -255,7 +386,8 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   if (!user) {
-    return <Navigate to="/auth" state={{ from: location }} replace />;
+    const loginPath = location.pathname.startsWith(ADMIN_PORTAL_PATH) ? ADMIN_LOGIN_PATH : "/auth";
+    return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
@@ -263,6 +395,16 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   return children;
+};
+
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
+  return null;
 };
 
 // App Router with session_id detection
@@ -276,8 +418,15 @@ function AppRouter() {
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/products" element={<ProductsPage />} />
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/products" element={<ProductsPage />} />
+      <Route path="/products/ghana-jersey-tournament" element={<ProductsPage forcedCategory="official-tournament" />} />
+      <Route path="/products/ghana-jersey-streetwear" element={<ProductsPage forcedCategory="streetwear" />} />
+      <Route path="/products/ghana-fan-jersey" element={<ProductsPage forcedCategory="fan" />} />
+      <Route path="/products/retro-ghana-jersey" element={<ProductsPage forcedCategory="retro" />} />
+      <Route path="/products/creative-ghana-jersey" element={<ProductsPage forcedCategory="creative-designer" />} />
+      <Route path="/products/local-club-ghana-jersey" element={<ProductsPage forcedCategory="local-club" />} />
       <Route path="/products/:productId" element={<ProductDetailPage />} />
       <Route path="/cart" element={<CartPage />} />
       <Route path="/wishlist" element={
@@ -285,17 +434,14 @@ function AppRouter() {
           <WishlistPage />
         </ProtectedRoute>
       } />
-      <Route path="/checkout" element={
-        <ProtectedRoute>
-          <CheckoutPage />
-        </ProtectedRoute>
-      } />
+      <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/order-success" element={
         <ProtectedRoute>
           <OrderSuccessPage />
         </ProtectedRoute>
       } />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path={ADMIN_LOGIN_PATH} element={<AuthPage mode="admin" />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/dashboard" element={
         <ProtectedRoute>
@@ -312,11 +458,12 @@ function AppRouter() {
           <VendorOnboarding />
         </ProtectedRoute>
       } />
-      <Route path="/admin" element={
+      <Route path={ADMIN_PORTAL_PATH} element={
         <ProtectedRoute allowedRoles={["admin"]}>
           <AdminDashboard />
         </ProtectedRoute>
       } />
+      <Route path="/admin" element={<Navigate to="/" replace />} />
       <Route path="/payment/callback" element={
         <ProtectedRoute>
           <PaymentCallbackPage />
@@ -331,6 +478,13 @@ function AppRouter() {
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/compare" element={<ComparePage />} />
+      <Route path="/blog" element={<BlogPage />} />
+      <Route path="/blog/:slug" element={<BlogPostPage />} />
+      <Route path={`${ADMIN_PORTAL_PATH}/blog`} element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <AdminBlogPage />
+        </ProtectedRoute>
+      } />
     </Routes>
   );
 }
@@ -343,6 +497,7 @@ function App() {
           <CartProvider>
             <UserActivityProvider>
               <Toaster position="top-right" richColors />
+              <ScrollToTop />
               <AppRouter />
               <CookieConsent />
             </UserActivityProvider>
@@ -354,4 +509,4 @@ function App() {
 }
 
 export default App;
-export { API, BACKEND_URL };
+export { API, BACKEND_URL, ADMIN_PORTAL_PATH, ADMIN_LOGIN_PATH, getProductPath };

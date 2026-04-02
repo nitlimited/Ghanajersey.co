@@ -15,6 +15,12 @@ import { useAuth, API } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
 
+const IMAGE_FORMAT_HELP = "JPG, JPEG, PNG, WEBP";
+const MAX_IMAGE_SIZE_MB = 5;
+const ONBOARDING_MIN_SIZE = "1000 x 1000 px";
+const PRODUCT_MIN_SIZE = "1200 x 1500 px";
+const PRODUCT_RECOMMENDED_SIZE = "1600 x 2000 px";
+
 const VendorOnboarding = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
@@ -22,7 +28,7 @@ const VendorOnboarding = () => {
   const [loading, setLoading] = useState(false);
   const [vendorStatus, setVendorStatus] = useState(null);
 
-  const totalSteps = 9;
+  const totalSteps = 10;
 
   // Form state for all steps
   const [formData, setFormData] = useState({
@@ -76,7 +82,17 @@ const VendorOnboarding = () => {
       fulfill_through_platform: false,
       agree_terms: false
     },
-    // Step 8: Verification
+    // Step 8: Payout
+    payout: {
+      payout_method: "",
+      momo_number: "",
+      momo_network: "",
+      bank_name: "",
+      account_name: "",
+      account_number: "",
+      bank_branch: ""
+    },
+    // Step 9: Verification
     verification: {
       jersey_photos: ["", ""],
       packaging_photo: ""
@@ -112,6 +128,38 @@ const VendorOnboarding = () => {
         [field]: value
       }
     }));
+  };
+
+  const handleDeleteUploadedImage = async (path, onSuccess, toastId) => {
+    if (!path) {
+      onSuccess();
+      return;
+    }
+
+    try {
+      toast.loading("Removing image...", { id: toastId });
+      await axios.delete(`${API}/upload/file`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { path }
+      });
+      onSuccess();
+      toast.success("Image removed", { id: toastId });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to remove image", { id: toastId });
+    }
+  };
+
+  const validateOnboardingImageFile = (file) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error(`Allowed formats: ${IMAGE_FORMAT_HELP}`);
+      return false;
+    }
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      toast.error(`Image size must be ${MAX_IMAGE_SIZE_MB}MB or less`);
+      return false;
+    }
+    return true;
   };
 
   const addSocialHandle = () => {
@@ -211,12 +259,26 @@ const VendorOnboarding = () => {
         }
         break;
       case 8:
+        if (!formData.payout.payout_method) {
+          toast.error("Please choose how you want to receive payouts");
+          return false;
+        }
+        if (formData.payout.payout_method === "momo" && (!formData.payout.momo_number || !formData.payout.momo_network)) {
+          toast.error("Please provide your MoMo network and number");
+          return false;
+        }
+        if (formData.payout.payout_method === "bank" && (!formData.payout.bank_name || !formData.payout.account_name || !formData.payout.account_number)) {
+          toast.error("Please provide your bank payout details");
+          return false;
+        }
+        break;
+      case 9:
         if (!formData.commitment.agree_terms) {
           toast.error("Please agree to the terms and conditions");
           return false;
         }
         break;
-      case 9:
+      case 10:
         const validPhotos = formData.verification.jersey_photos.filter(p => p.trim() !== "");
         if (validPhotos.length < 2) {
           toast.error("Please upload at least 2 jersey photos");
@@ -262,8 +324,9 @@ const VendorOnboarding = () => {
     { num: 5, title: "Delivery", icon: Truck },
     { num: 6, title: "Quality", icon: Shield },
     { num: 7, title: "Commitment", icon: FileCheck },
-    { num: 8, title: "Agreement", icon: FileCheck },
-    { num: 9, title: "Verification", icon: Camera }
+    { num: 8, title: "Payout", icon: MessageCircle },
+    { num: 9, title: "Agreement", icon: FileCheck },
+    { num: 10, title: "Verification", icon: Camera }
   ];
 
   // Show pending approval screen
@@ -858,8 +921,113 @@ const VendorOnboarding = () => {
             </div>
           )}
 
-          {/* Step 8: Agreement */}
+          {/* Step 8: Payout Details */}
           {currentStep === 8 && (
+            <div className="space-y-6">
+              <h2 className="font-heading text-xl mb-6">Payout Details</h2>
+              <p className="font-body text-sm text-muted-text">
+                Tell us where we should send your vendor payouts after orders are completed and confirmed.
+              </p>
+
+              <div>
+                <Label className="font-body text-sm uppercase tracking-wider mb-3 block">Preferred Payout Method *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { id: "momo", label: "Mobile Money", description: "MTN MoMo, AirtelTigo Money, or VodaCash" },
+                    { id: "bank", label: "Bank Transfer", description: "Receive payouts into your bank account" }
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => updateFormData("payout", "payout_method", option.id)}
+                      className={`text-left border p-4 transition-all ${
+                        formData.payout.payout_method === option.id
+                          ? "border-ashanti-gold bg-ashanti-gold/10"
+                          : "border-black/10 hover:border-black/30"
+                      }`}
+                    >
+                      <p className="font-body text-sm font-semibold uppercase tracking-wide">{option.label}</p>
+                      <p className="font-body text-xs text-muted-text mt-1">{option.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {formData.payout.payout_method === "momo" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">MoMo Network *</Label>
+                    <Select
+                      value={formData.payout.momo_network}
+                      onValueChange={(value) => updateFormData("payout", "momo_network", value)}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="Select network" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mtn_momo">MTN MoMo</SelectItem>
+                        <SelectItem value="airteltigo_money">AirtelTigo Money</SelectItem>
+                        <SelectItem value="vodacash">VodaCash</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">MoMo Number *</Label>
+                    <Input
+                      value={formData.payout.momo_number}
+                      onChange={(e) => updateFormData("payout", "momo_number", e.target.value)}
+                      placeholder="+233 XX XXX XXXX"
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formData.payout.payout_method === "bank" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Bank Name *</Label>
+                    <Input
+                      value={formData.payout.bank_name}
+                      onChange={(e) => updateFormData("payout", "bank_name", e.target.value)}
+                      placeholder="GCB Bank"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Account Name *</Label>
+                    <Input
+                      value={formData.payout.account_name}
+                      onChange={(e) => updateFormData("payout", "account_name", e.target.value)}
+                      placeholder="Kwame Mensah"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Account Number *</Label>
+                    <Input
+                      value={formData.payout.account_number}
+                      onChange={(e) => updateFormData("payout", "account_number", e.target.value)}
+                      placeholder="0123456789"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Bank Branch</Label>
+                    <Input
+                      value={formData.payout.bank_branch}
+                      onChange={(e) => updateFormData("payout", "bank_branch", e.target.value)}
+                      placeholder="Accra Main"
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 9: Agreement */}
+          {currentStep === 9 && (
             <div className="space-y-6">
               <h2 className="font-heading text-xl mb-6">Terms & Agreement</h2>
 
@@ -895,13 +1063,35 @@ const VendorOnboarding = () => {
             </div>
           )}
 
-          {/* Step 9: Vendor Verification */}
-          {currentStep === 9 && (
+          {/* Step 10: Vendor Verification */}
+          {currentStep === 10 && (
             <div className="space-y-6">
               <h2 className="font-heading text-xl mb-6">Vendor Verification</h2>
               <p className="font-body text-sm text-muted-text mb-6">
                 Upload clear photos to verify your business. These images help us ensure quality standards on the platform.
               </p>
+
+              <div className="border border-ashanti-gold/30 bg-ashanti-gold/5 p-5 space-y-4">
+                <div>
+                  <p className="font-body text-xs uppercase tracking-[0.2em] text-ashanti-gold mb-2">Verification Image Rules</p>
+                  <p className="font-body text-sm text-muted-text">These onboarding images are for vendor verification only, so real-life backgrounds are allowed.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="border border-black/10 bg-white p-3">
+                    <p className="font-body font-semibold">Onboarding upload specs</p>
+                    <p className="font-body text-muted-text mt-1">Formats: {IMAGE_FORMAT_HELP}</p>
+                    <p className="font-body text-muted-text">Max size: {MAX_IMAGE_SIZE_MB}MB per image</p>
+                    <p className="font-body text-muted-text">Minimum: {ONBOARDING_MIN_SIZE}</p>
+                  </div>
+                  <div className="border border-black/10 bg-white p-3">
+                    <p className="font-body font-semibold">Future product listing standard</p>
+                    <p className="font-body text-muted-text mt-1">Front and back product images must use a white background</p>
+                    <p className="font-body text-muted-text">Minimum: {PRODUCT_MIN_SIZE}</p>
+                    <p className="font-body text-muted-text">Recommended: {PRODUCT_RECOMMENDED_SIZE}</p>
+                    <p className="font-body text-muted-text">This keeps all storefront jerseys aligned consistently</p>
+                  </div>
+                </div>
+              </div>
 
               <div>
                 <Label className="font-body text-sm uppercase tracking-wider mb-3 block">
@@ -917,6 +1107,7 @@ const VendorOnboarding = () => {
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
+                          if (!validateOnboardingImageFile(file)) return;
                           
                           const uploadData = new FormData();
                           uploadData.append('file', file);
@@ -924,10 +1115,7 @@ const VendorOnboarding = () => {
                           try {
                             toast.loading("Uploading image...", { id: `upload-jersey-${index}` });
                             const res = await axios.post(`${API}/upload/vendor-image`, uploadData, {
-                              headers: { 
-                                Authorization: `Bearer ${token}`,
-                                'Content-Type': 'multipart/form-data'
-                              }
+                              headers: { Authorization: `Bearer ${token}` }
                             });
                             const newPhotos = [...formData.verification.jersey_photos];
                             newPhotos[index] = res.data.path;
@@ -939,12 +1127,30 @@ const VendorOnboarding = () => {
                         }}
                       />
                       {photo && (
-                        <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
-                          <img 
-                            src={`${API}/files/${photo}`} 
-                            alt={`Jersey ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
+                            <img 
+                              src={`${API}/files/${photo}`} 
+                              alt={`Jersey ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteUploadedImage(
+                              photo,
+                              () => {
+                                const newPhotos = [...formData.verification.jersey_photos];
+                                newPhotos[index] = "";
+                                updateFormData('verification', 'jersey_photos', newPhotos);
+                              },
+                              `delete-jersey-${index}`
+                            )}
+                          >
+                            <X size={14} className="mr-1" /> Remove
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -976,6 +1182,7 @@ const VendorOnboarding = () => {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      if (!validateOnboardingImageFile(file)) return;
                       
                       const uploadData = new FormData();
                       uploadData.append('file', file);
@@ -983,10 +1190,7 @@ const VendorOnboarding = () => {
                       try {
                         toast.loading("Uploading image...", { id: 'upload-packaging' });
                         const res = await axios.post(`${API}/upload/vendor-image`, uploadData, {
-                          headers: { 
-                            Authorization: `Bearer ${token}`,
-                            'Content-Type': 'multipart/form-data'
-                          }
+                          headers: { Authorization: `Bearer ${token}` }
                         });
                         updateFormData('verification', 'packaging_photo', res.data.path);
                         toast.success("Image uploaded!", { id: 'upload-packaging' });
@@ -996,12 +1200,26 @@ const VendorOnboarding = () => {
                     }}
                   />
                   {formData.verification.packaging_photo && (
-                    <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
-                      <img 
-                        src={`${API}/files/${formData.verification.packaging_photo}`} 
-                        alt="Packaging"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 h-16 border border-black/10 overflow-hidden flex-shrink-0">
+                        <img 
+                          src={`${API}/files/${formData.verification.packaging_photo}`} 
+                          alt="Packaging"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteUploadedImage(
+                          formData.verification.packaging_photo,
+                          () => updateFormData('verification', 'packaging_photo', ""),
+                          "delete-packaging"
+                        )}
+                      >
+                        <X size={14} className="mr-1" /> Remove
+                      </Button>
                     </div>
                   )}
                 </div>

@@ -2,9 +2,19 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Star, ShoppingBag, Heart, Menu, X, User, ChevronRight, Search, Home } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { useAuth, useCart, API } from "../App";
+import { useAuth, useCart, API, ADMIN_PORTAL_PATH, getProductPath } from "../App";
 import { useLocalization, LanguageSelector } from "../localization";
 import axios from "axios";
+import SEO from "../components/SEO";
+
+const categoryPathMap = {
+  "official-tournament": "/products/ghana-jersey-tournament",
+  "streetwear": "/products/ghana-jersey-streetwear",
+  "fan": "/products/ghana-fan-jersey",
+  "retro": "/products/retro-ghana-jersey",
+  "creative-designer": "/products/creative-ghana-jersey",
+  "local-club": "/products/local-club-ghana-jersey"
+};
 
 // Announcement Bar Component
 const AnnouncementBar = ({ isSticky = false }) => {
@@ -75,7 +85,7 @@ const SearchOverlay = ({ isOpen, onClose }) => {
           {["Tournament", "Streetwear", "Fan", "Retro", "Designers"].map((cat) => (
             <Link
               key={cat}
-              to={`/products?category=${cat.toLowerCase() === 'designers' ? 'creative-designer' : cat.toLowerCase() === 'tournament' ? 'official-tournament' : cat.toLowerCase()}`}
+              to={categoryPathMap[cat.toLowerCase() === 'designers' ? 'creative-designer' : cat.toLowerCase() === 'tournament' ? 'official-tournament' : cat.toLowerCase()]}
               onClick={onClose}
               className="px-4 py-2 border border-white/20 text-white hover:border-ashanti-gold hover:text-ashanti-gold font-body text-sm transition-colors"
             >
@@ -223,19 +233,19 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
           <div className="hidden md:flex items-center justify-between h-20">
             {/* Left - Navigation */}
             <nav className="flex items-center gap-5 pr-16">
-              <Link to="/products?category=official-tournament" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-official">
+              <Link to={categoryPathMap["official-tournament"]} className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-official">
                 {t('nav.tournament')}
               </Link>
-              <Link to="/products?category=streetwear" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-streetwear">
+              <Link to={categoryPathMap["streetwear"]} className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-streetwear">
                 {t('nav.streetwear')}
               </Link>
-              <Link to="/products?category=fan" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-fan">
+              <Link to={categoryPathMap["fan"]} className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-fan">
                 {t('nav.fan')}
               </Link>
-              <Link to="/products?category=retro" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-retro">
+              <Link to={categoryPathMap["retro"]} className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-retro">
                 {t('nav.retro')}
               </Link>
-              <Link to="/products?category=creative-designer" className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
+              <Link to={categoryPathMap["creative-designer"]} className={`font-body text-sm font-semibold tracking-wide transition-colors ${useDarkText ? 'text-black hover:text-ashanti-gold' : 'text-white hover:text-ashanti-gold'}`} data-testid="nav-creative">
                 {t('nav.designers')}
               </Link>
             </nav>
@@ -277,7 +287,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
                       </Link>
                     )}
                     {user.role === "admin" && (
-                      <Link to="/admin" className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
+                      <Link to={ADMIN_PORTAL_PATH} className="block px-4 py-2 hover:bg-black/5 font-body text-sm text-black" data-testid="link-admin">
                         {t('nav.adminDashboard')}
                       </Link>
                     )}
@@ -310,25 +320,59 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
         {isMenuOpen && (
           <div className="md:hidden bg-white border-t border-black/10">
             <nav className="flex flex-col py-4">
-              <Link to="/products?category=official-tournament" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              <Link to={categoryPathMap["official-tournament"]} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.tournament')}
               </Link>
-              <Link to="/products?category=streetwear" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              <Link to={categoryPathMap["streetwear"]} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.streetwear')}
               </Link>
-              <Link to="/products?category=fan" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              <Link to={categoryPathMap["fan"]} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.fan')}
               </Link>
-              <Link to="/products?category=retro" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              <Link to={categoryPathMap["retro"]} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.retro')}
               </Link>
-              <Link to="/products?category=creative-designer" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
+              <Link to={categoryPathMap["creative-designer"]} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.designers')}
               </Link>
               <div className="border-t border-black/10 mt-2 pt-2">
                 <Link to="/sell" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-ashanti-gold block" onClick={() => setIsMenuOpen(false)}>
                   {t('footer.sellWithUs')}
                 </Link>
+                {user ? (
+                  <>
+                    <Link to="/dashboard" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-dashboard">
+                      {t('nav.myOrders')}
+                    </Link>
+                    <Link to="/wishlist" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-wishlist">
+                      {t('nav.wishlist')}
+                    </Link>
+                    {user.role === "vendor" && (
+                      <Link to="/vendor" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-vendor">
+                        {t('nav.vendorDashboard')}
+                      </Link>
+                    )}
+                    {user.role === "admin" && (
+                      <Link to={ADMIN_PORTAL_PATH} className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-admin">
+                        {t('nav.adminDashboard')}
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => {
+                        logout();
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full text-left px-6 py-3 font-body text-sm font-semibold tracking-wide text-ghana-red block"
+                      data-testid="mobile-btn-logout"
+                    >
+                      {t('nav.logout')}
+                    </button>
+                  </>
+                ) : (
+                  <Link to="/auth" className="px-6 py-3 font-body text-sm font-semibold tracking-wide text-black block" onClick={() => setIsMenuOpen(false)} data-testid="mobile-link-auth">
+                    Sign In
+                  </Link>
+                )}
                 {/* Mobile Language Selector */}
                 <div className="px-6 py-3">
                   <LanguageSelector variant="light" />
@@ -345,6 +389,7 @@ const Header = ({ forceLight = false, stickyAnnouncement = false }) => {
 // Footer Component
 const Footer = () => {
   const [email, setEmail] = useState("");
+  const [showContactPanel, setShowContactPanel] = useState(false);
 
   const handleSubscribe = async (e) => {
     e.preventDefault();
@@ -385,10 +430,10 @@ const Footer = () => {
             <h4 className="font-heading text-sm tracking-wide mb-4">Shop</h4>
             <nav className="flex flex-col gap-2">
               <Link to="/products" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">All Jerseys</Link>
-              <Link to="/products?category=official-tournament" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Tournament</Link>
-              <Link to="/products?category=streetwear" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Streetwear</Link>
-              <Link to="/products?category=retro" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Retro</Link>
-              <Link to="/products?category=creative-designer" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Designers</Link>
+              <Link to={categoryPathMap["official-tournament"]} className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Tournament</Link>
+              <Link to={categoryPathMap["streetwear"]} className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Streetwear</Link>
+              <Link to={categoryPathMap["retro"]} className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Retro</Link>
+              <Link to={categoryPathMap["creative-designer"]} className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Designers</Link>
             </nav>
           </div>
 
@@ -397,6 +442,15 @@ const Footer = () => {
             <h4 className="font-heading text-sm tracking-wide mb-4">Company</h4>
             <nav className="flex flex-col gap-2">
               <Link to="/sell" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Become a Seller</Link>
+              <Link to="/about" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">About</Link>
+              <Link to="/blog" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Blog</Link>
+              <button
+                type="button"
+                onClick={() => setShowContactPanel(true)}
+                className="font-body text-sm text-left text-white/60 hover:text-ashanti-gold transition-colors"
+              >
+                Contact
+              </button>
               <Link to="/terms" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
               <Link to="/privacy" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
               <Link to="/compare" className="font-body text-sm text-white/60 hover:text-ashanti-gold transition-colors">Compare Jerseys</Link>
@@ -432,10 +486,71 @@ const Footer = () => {
           <div className="flex gap-6">
             <Link to="/terms" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Terms & Conditions</Link>
             <Link to="/privacy" className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors">Privacy Policy</Link>
+            <button
+              type="button"
+              onClick={() => setShowContactPanel(true)}
+              className="font-body text-xs text-white/40 hover:text-ashanti-gold transition-colors"
+            >
+              Contact
+            </button>
             <span className="font-body text-xs text-white/40">Ships Worldwide</span>
           </div>
         </div>
       </div>
+      {showContactPanel && (
+        <div className="fixed inset-0 z-[110] bg-black/50" onClick={() => setShowContactPanel(false)}>
+          <div
+            className="absolute inset-x-0 bottom-0 bg-white text-black rounded-t-[28px] border-t border-black/10 shadow-2xl p-6 md:p-8 max-h-[85vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <div>
+                  <p className="font-body text-xs uppercase tracking-[0.2em] text-muted-text mb-2">Contact</p>
+                  <h3 className="font-heading text-2xl tracking-wide uppercase">GhanaJersey</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowContactPanel(false)}
+                  className="text-muted-text hover:text-black"
+                  aria-label="Close contact panel"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Trade Name</p>
+                  <p className="font-body text-base font-medium mt-2">Ghanajersey</p>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Email</p>
+                  <a href="mailto:ghanajersey.co@gmail.com" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
+                    ghanajersey.co@gmail.com
+                  </a>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Inquiry</p>
+                  <a href="mailto:info@ghanajersey.co" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
+                    info@ghanajersey.co
+                  </a>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Phone</p>
+                  <a href="tel:+233248167944" className="font-body text-base font-medium mt-2 block hover:text-ashanti-gold transition-colors">
+                    +233248167944
+                  </a>
+                </div>
+                <div className="border border-black/10 bg-bone-white p-4 md:col-span-2">
+                  <p className="font-body text-xs uppercase tracking-widest text-muted-text">Physical Address</p>
+                  <p className="font-body text-base font-medium mt-2">Ubor Ntiador LK, Accra - Ghana</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Extra padding for mobile bottom nav */}
       <div className="md:hidden h-16"></div>
     </footer>
@@ -467,7 +582,7 @@ const ProductCard = ({ product }) => {
   const secondaryImage = product.images?.[1] || product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600";
   
   return (
-    <Link to={`/products/${product.product_id}`} className="group block" data-testid={`product-card-${product.product_id}`}>
+    <Link to={getProductPath(product)} className="group block" data-testid={`product-card-${product.product_id}`}>
       <div className="relative overflow-hidden border border-transparent hover:border-black transition-all duration-300">
         <div className="aspect-[3/4] overflow-hidden bg-gray-100 relative">
           {/* Primary Image */}
@@ -591,6 +706,23 @@ const LandingPage = () => {
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="landing-page">
+      <SEO
+        title="Ghana Jersey Shop for Black Stars Jersey, Retro Kits and Designer Drops"
+        description="Buy Ghana jersey styles, Black Stars jersey drops, retro Ghana football shirts, and creative local designer kits from one marketplace built around Ghana jersey culture."
+        canonicalPath="/"
+        keywords="ghana jersey, black stars jersey, buy ghana jersey, ghana football jersey, ghana soccer jersey, blackstars jersey"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "GhanaJersey.co",
+          url: window.location.origin,
+          potentialAction: {
+            "@type": "SearchAction",
+            target: `${window.location.origin}/products?search={search_term_string}`,
+            "query-input": "required name=search_term_string"
+          }
+        }}
+      />
       <Header />
 
       {/* Hero Section */}
@@ -598,17 +730,17 @@ const LandingPage = () => {
         <div className="absolute inset-0">
           <img
             src="https://customer-assets.emergentagent.com/job_kente-market-1/artifacts/5rjkj9m0_Hero%20Banner.jpg"
-            alt="Ghana Jersey Collection"
+            alt="Ghana jersey and Black Stars jersey collection"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-black/30"></div>
         </div>
         <div className="relative z-10 text-center text-white px-6 max-w-4xl">
           <h1 className="font-heading text-4xl sm:text-5xl lg:text-7xl font-semibold mb-6 animate-fade-up" data-testid="hero-title">
-            Curated Ghana Jersey
+            Wear The Black Star
           </h1>
           <p className="font-body text-lg md:text-xl text-white/90 mb-10 tracking-wide animate-fade-up italic" style={{ animationDelay: '0.2s' }}>
-            for the love of country and culture
+            Shop the pride, pulse, and culture of Ghana in every jersey
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-up" style={{ animationDelay: '0.4s' }}>
             <Link to="/products">
@@ -634,6 +766,15 @@ const LandingPage = () => {
 
       {/* Marquee */}
       <Marquee />
+
+      <section className="py-14 px-6 md:px-12 bg-white border-b border-black/5">
+        <div className="max-w-5xl mx-auto text-center">
+          <h2 className="font-heading text-2xl md:text-3xl tracking-wide uppercase">Your Home for Ghana Jersey and Black Stars Jersey Shopping</h2>
+          <p className="font-body text-muted-text leading-7 mt-5">
+            Shop Ghana jersey styles, Black Stars jersey favorites, retro football looks, and culture-led designer releases from one marketplace built for fans in Ghana and abroad.
+          </p>
+        </div>
+      </section>
 
       {/* Personalized: Recently Viewed (if any) */}
       {recentlyViewed.length > 0 && (
@@ -711,14 +852,14 @@ const LandingPage = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* Top Voted Jersey - Large Card */}
           <Link
-            to={topVotedProduct ? `/products/${topVotedProduct.product_id}` : "/products?category=official-tournament"}
+            to={topVotedProduct ? getProductPath(topVotedProduct) : "/products?category=official-tournament"}
             className="col-span-2 row-span-2 relative overflow-hidden group"
             data-testid="top-voted-category"
           >
             <div className="aspect-square overflow-hidden">
               <img
                 src={topVotedProduct?.images?.[0] || categoryImages["official-tournament"]}
-                alt="Top Voted Jersey"
+                alt="Top voted Ghana jersey"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
               />
             </div>
@@ -746,7 +887,7 @@ const LandingPage = () => {
           {categories.slice(1, 5).map((category) => (
             <Link
               key={category.id}
-              to={`/products?category=${category.id}`}
+              to={category.url || categoryPathMap[category.id] || `/products?category=${category.id}`}
               className="relative overflow-hidden group"
               data-testid={`category-${category.id}`}
             >
@@ -817,7 +958,7 @@ const LandingPage = () => {
             <p className="font-body text-white/80 mb-6 max-w-xl mx-auto">
               Authentic and fan-made jerseys from major tournaments. AFCON, World Cup, and more.
             </p>
-            <Link to="/products?category=official-tournament">
+            <Link to={categoryPathMap["official-tournament"]}>
               <Button className="bg-ashanti-gold text-black hover:bg-white px-8 py-4 font-body font-semibold">
                 Shop Tournament Jerseys
               </Button>
@@ -834,7 +975,7 @@ const LandingPage = () => {
               <h2 className="font-heading text-2xl md:text-3xl tracking-wide">Designer Jerseys</h2>
               <p className="font-body text-muted-text mt-2">Unique creations from Ghanaian designers</p>
             </div>
-            <Link to="/products?category=creative-designer" className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
+            <Link to={categoryPathMap["creative-designer"]} className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
               View All <ChevronRight size={16} />
             </Link>
           </div>
@@ -866,7 +1007,7 @@ const LandingPage = () => {
               </div>
               <div className="hidden md:grid grid-cols-2 gap-4">
                 {featuredProducts.slice(0, 2).map((product) => (
-                  <Link key={product.product_id} to={`/products/${product.product_id}`} className="aspect-square bg-white/10 overflow-hidden">
+                  <Link key={product.product_id} to={getProductPath(product)} className="aspect-square bg-white/10 overflow-hidden">
                     <img src={product.images?.[0]} alt={product.name} className="w-full h-full object-cover hover:scale-105 transition-transform" />
                   </Link>
                 ))}
@@ -881,7 +1022,7 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-12">
             <h2 className="font-heading text-2xl md:text-3xl tracking-wide">Street Style Jerseys</h2>
-            <Link to="/products?category=streetwear" className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
+            <Link to={categoryPathMap["streetwear"]} className="font-body text-sm font-medium hover:text-ashanti-gold transition-colors flex items-center gap-2">
               View All <ChevronRight size={16} />
             </Link>
           </div>
@@ -909,7 +1050,7 @@ const LandingPage = () => {
               <p className="font-body text-white/80 mb-6">
                 Support Hearts of Oak, Asante Kotoko, and other Ghanaian Premier League clubs.
               </p>
-              <Link to="/products?category=local-club">
+              <Link to={categoryPathMap["local-club"]}>
                 <Button className="bg-ashanti-gold text-black hover:bg-white px-8 py-4 font-body font-semibold">
                   Shop Local Clubs
                 </Button>

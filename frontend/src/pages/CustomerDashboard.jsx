@@ -4,7 +4,7 @@ import { Package, Heart, User, Settings, ChevronRight, MapPin, Clock } from "luc
 import { Button } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Header, Footer } from "./LandingPage";
-import { useAuth, API } from "../App";
+import { useAuth, API, getProductPath } from "../App";
 import axios from "axios";
 
 const CustomerDashboard = () => {
@@ -166,7 +166,7 @@ const CustomerDashboard = () => {
             ) : wishlist.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 {wishlist.map((product) => (
-                  <Link key={product.product_id} to={`/products/${product.product_id}`} className="group">
+                  <Link key={product.product_id} to={getProductPath(product)} className="group">
                     <div className="aspect-[3/4] bg-gray-100 overflow-hidden">
                       <img
                         src={product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=400"}

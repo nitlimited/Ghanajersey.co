@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CreditCard, Truck, Shield } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -13,13 +13,16 @@ import { toast } from "sonner";
 import axios from "axios";
 
 const CheckoutPage = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
-  const { cart, clearCart } = useCart();
+  const { user, token, register, login } = useAuth();
+  const { cart, clearCart, syncGuestCartToServer } = useCart();
   const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(isGhana ? "paystack" : "stripe");
+  const [customerAccount, setCustomerAccount] = useState({
+    email: user?.email || "",
+    password: ""
+  });
 
   const [shippingAddress, setShippingAddress] = useState({
     full_name: user?.name || "",
@@ -41,14 +44,25 @@ const CheckoutPage = () => {
   };
 
   const subtotal = cart.items.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
+  const qualifiesForInternationalFreeShipping = !isGhana && subtotal >= 200;
   
   // Shipping costs in respective currencies
   const shippingCost = isGhana 
     ? (shippingAddress.country === "Ghana" ? 50 : 250)  // GHS rates
-    : (shippingAddress.country === "Ghana" ? 5 : 15);   // USD rates
+    : (shippingAddress.country === "Ghana" ? 5 : qualifiesForInternationalFreeShipping ? 0 : 15);   // USD rates
   
   const total = subtotal + shippingCost;
   const currency = getCurrencyCode();
+  const formatLocalizedAmount = (amount) => formatPrice(amount, isGhana ? amount : null);
+  const paymentBrands = [
+    "Amazon Pay", "American Express", "Apple Pay", "Discover", "Mastercard", "Visa",
+    "MTN MoMo", "AirtelTigo Money", "VodaCash"
+  ];
+  const shippingWindows = [
+    { country: "United States", timeline: "3-5 Days" },
+    { country: "Canada & Mexico", timeline: "7-14 Days" },
+    { country: "Rest of the world", timeline: "+14 Days" }
+  ];
 
   const countries = [
     "Ghana", "United States", "United Kingdom", "Germany", "France", 
@@ -68,7 +82,57 @@ const CheckoutPage = () => {
         return false;
       }
     }
+
+    if (!user) {
+      if (!customerAccount.email) {
+        toast.error("Please provide an email for your order");
+        return false;
+      }
+      if (!customerAccount.password || customerAccount.password.length < 6) {
+        toast.error("Please create a password with at least 6 characters");
+        return false;
+      }
+    }
+
     return true;
+  };
+
+  const ensureCheckoutCustomer = async () => {
+    if (token && user) {
+      return token;
+    }
+
+    try {
+      const newUser = await register(
+        customerAccount.email,
+        customerAccount.password,
+        shippingAddress.full_name,
+        "customer"
+      );
+      const authToken = localStorage.getItem("auth_token");
+      if (!authToken) {
+        throw new Error("Customer session could not be created");
+      }
+      await syncGuestCartToServer(authToken);
+      toast.success(`Account created for ${newUser.name}. Continuing to payment.`);
+      return authToken;
+    } catch (error) {
+      if (error.response?.data?.detail === "Email already registered") {
+        const existingUser = await login(customerAccount.email, customerAccount.password);
+        if (existingUser.role !== "customer") {
+          throw new Error("This email belongs to a non-customer account. Please use a different email for checkout.");
+        }
+        const authToken = localStorage.getItem("auth_token");
+        if (!authToken) {
+          throw new Error("Customer session could not be created");
+        }
+        await syncGuestCartToServer(authToken);
+        toast.success("Signed in to your customer account. Continuing to payment.");
+        return authToken;
+      }
+
+      throw error;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -83,6 +147,8 @@ const CheckoutPage = () => {
     setLoading(true);
 
     try {
+      const activeToken = await ensureCheckoutCustomer();
+
       // Create order with correct currency based on location
       const orderItems = cart.items.map(item => ({
         product_id: item.product_id,
@@ -103,7 +169,7 @@ const CheckoutPage = () => {
         shipping_cost: shippingCost,
         total: total
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${activeToken}` }
       });
 
       const { order_id } = orderResponse.data;
@@ -116,7 +182,7 @@ const CheckoutPage = () => {
           order_id,
           origin_url: originUrl
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         // Redirect to Stripe
@@ -126,12 +192,12 @@ const CheckoutPage = () => {
           order_id,
           origin_url: originUrl
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         // For demo, simulate PayPal success
         const captureResponse = await axios.post(`${API}/payments/paypal/capture/${paymentResponse.data.order_id}`, {}, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         if (captureResponse.data.status === "COMPLETED") {
@@ -142,10 +208,10 @@ const CheckoutPage = () => {
         // Paystack for Ghana customers (GHS) or other African countries
         const paymentResponse = await axios.post(`${API}/payments/paystack/initialize`, {
           order_id,
-          email: user?.email,
+          email: user?.email || customerAccount.email,
           callback_url: `${originUrl}/payment/paystack/callback`
         }, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${activeToken}` }
         });
 
         if (paymentResponse.data.authorization_url) {
@@ -157,7 +223,7 @@ const CheckoutPage = () => {
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      toast.error(error.response?.data?.detail || "Checkout failed. Please try again.");
+      toast.error(error.response?.data?.detail || error.message || "Checkout failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -187,6 +253,37 @@ const CheckoutPage = () => {
                   <Truck size={24} />
                   <h2 className="font-heading text-lg tracking-widest uppercase">Shipping Address</h2>
                 </div>
+
+                {!user && (
+                  <div className="mb-8 border border-black/10 bg-black/[0.02] p-5 space-y-4">
+                    <div>
+                      <h3 className="font-heading text-sm tracking-widest uppercase">Customer Account</h3>
+                      <p className="font-body text-sm text-muted-text mt-2">
+                        Your customer account will be created during checkout so you can track this order later.
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="font-body text-sm uppercase tracking-wider">Email</Label>
+                      <Input
+                        type="email"
+                        value={customerAccount.email}
+                        onChange={(e) => setCustomerAccount((prev) => ({ ...prev, email: e.target.value }))}
+                        className="mt-2 rounded-none border-black/20 focus:border-black"
+                        data-testid="checkout-email"
+                      />
+                    </div>
+                    <div>
+                      <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
+                      <Input
+                        type="password"
+                        value={customerAccount.password}
+                        onChange={(e) => setCustomerAccount((prev) => ({ ...prev, password: e.target.value }))}
+                        className="mt-2 rounded-none border-black/20 focus:border-black"
+                        data-testid="checkout-password"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
@@ -336,6 +433,41 @@ const CheckoutPage = () => {
                     )}
                   </p>
                 </div>
+
+                <div className="mt-6">
+                  <h3 className="font-heading text-sm tracking-widest uppercase mb-3">Accepted Payments</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {paymentBrands.map((brand) => (
+                      <div key={brand} className="border border-black/10 px-3 py-3 text-center bg-bone-white">
+                        <span className="font-body text-xs uppercase tracking-[0.18em]">{brand}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-8 border border-black/10">
+                <div className="flex items-center gap-3 mb-6">
+                  <Truck size={24} />
+                  <h2 className="font-heading text-lg tracking-widest uppercase">Shipping Policy</h2>
+                </div>
+
+                <div className="space-y-5 font-body text-sm text-muted-text">
+                  <p>International shipping is managed by <strong className="text-black">ghanajersey.co</strong>. Local shipping inside Ghana is managed by <strong className="text-black">local vendors</strong>.</p>
+                  <p>Once your order has been shipped, a shipping confirmation email is sent with your order details and tracking information.</p>
+                  <p>After payment is verified, we process and ship orders within 2 business days, excluding weekends and holidays. Pre-ordered items take 4-6 weeks to ship from the date the pre-order is placed.</p>
+                  <p>Express shipping options are also available at checkout. Customs fees are the responsibility of the customer.</p>
+                  <p className="font-semibold text-black">Free shipping on orders over $200.</p>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {shippingWindows.map((window) => (
+                    <div key={window.country} className="border border-black/10 p-4 bg-bone-white">
+                      <p className="font-body text-xs uppercase tracking-widest text-muted-text">{window.country}</p>
+                      <p className="font-heading text-lg mt-2">{window.timeline}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -363,18 +495,24 @@ const CheckoutPage = () => {
                 <div className="border-t border-black/10 pt-4 space-y-3">
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Subtotal</span>
-                    <span>{formatPrice(subtotal, isGhana ? subtotal : null)}</span>
+                    <span>{formatLocalizedAmount(subtotal)}</span>
                   </div>
                   <div className="flex justify-between font-body text-sm">
                     <span className="text-muted-text">Shipping {shippingAddress.country === "Ghana" ? "(Local)" : "(International)"}</span>
-                    <span>{formatPrice(isGhana ? shippingCost / 15.38 : shippingCost, isGhana ? shippingCost : null)}</span>
+                    <span>{formatLocalizedAmount(shippingCost)}</span>
                   </div>
+                  {qualifiesForInternationalFreeShipping && !isGhana && (
+                    <div className="flex justify-between font-body text-sm text-ghana-green">
+                      <span>Free shipping applied</span>
+                      <span>Orders over $200</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-black/10 pt-4 mt-4 mb-6">
                   <div className="flex justify-between font-body">
                     <span className="font-medium">Total</span>
-                    <span className="text-xl font-medium" data-testid="checkout-total">{formatPrice(isGhana ? total / 15.38 : total, isGhana ? total : null)}</span>
+                    <span className="text-xl font-medium" data-testid="checkout-total">{formatLocalizedAmount(total)}</span>
                   </div>
                 </div>
 
@@ -384,7 +522,7 @@ const CheckoutPage = () => {
                   className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
                   data-testid="place-order-btn"
                 >
-                  {loading ? "Processing..." : `Pay ${formatPrice(isGhana ? total / 15.38 : total, isGhana ? total : null)}`}
+                  {loading ? "Processing..." : `Pay ${formatLocalizedAmount(total)}`}
                 </Button>
 
                 <div className="flex items-center justify-center gap-2 mt-4 text-muted-text">

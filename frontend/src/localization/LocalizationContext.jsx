@@ -19,19 +19,39 @@ const detectCountry = async () => {
   if (timezone && timezone.includes('Accra')) {
     return 'GH';
   }
-  
-  // Try IP geolocation API
-  try {
-    const response = await fetch('https://ipapi.co/json/', { timeout: 3000 });
-    if (response.ok) {
+
+  const tryFetchCountryCode = async (url, getCountryCode) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 3000);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) {
+        return null;
+      }
+
       const data = await response.json();
-      return data.country_code;
+      const countryCode = getCountryCode(data);
+      return typeof countryCode === 'string' ? countryCode.toUpperCase() : null;
+    } catch (error) {
+      return null;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
-  } catch (error) {
-    console.log('Geolocation detection failed, defaulting to international');
+  };
+
+  const providers = [
+    ['https://ipapi.co/json/', (data) => data.country_code],
+    ['https://ipwho.is/', (data) => data.country_code]
+  ];
+
+  for (const [url, getCountryCode] of providers) {
+    const countryCode = await tryFetchCountryCode(url, getCountryCode);
+    if (countryCode) {
+      return countryCode;
+    }
   }
-  
-  // Default to non-Ghana (international)
+
   return null;
 };
 
@@ -53,24 +73,50 @@ export const LocalizationProvider = ({ children }) => {
 
   // Detect country on mount - this determines currency automatically
   useEffect(() => {
+    const COUNTRY_CACHE_KEY = 'bst_country_detection';
+    const GHANA_CACHE_KEY = 'bst_is_ghana';
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
     const detect = async () => {
       const country = await detectCountry();
       const userInGhana = country === 'GH';
+
+      if (country) {
+        localStorage.setItem(COUNTRY_CACHE_KEY, JSON.stringify({
+          countryCode: country,
+          detectedAt: Date.now()
+        }));
+      }
+
+      localStorage.setItem(GHANA_CACHE_KEY, userInGhana ? 'true' : 'false');
       setIsGhana(userInGhana);
       setCountryDetected(true);
-      
-      // Store for consistency across page reloads
-      localStorage.setItem('bst_is_ghana', userInGhana ? 'true' : 'false');
     };
-    
-    // Check if we already detected
-    const storedIsGhana = localStorage.getItem('bst_is_ghana');
+
+    const cachedDetection = localStorage.getItem(COUNTRY_CACHE_KEY);
+    const storedIsGhana = localStorage.getItem(GHANA_CACHE_KEY);
+
+    if (cachedDetection) {
+      try {
+        const parsed = JSON.parse(cachedDetection);
+        const isFresh = parsed?.detectedAt && (Date.now() - parsed.detectedAt) < CACHE_TTL_MS;
+
+        if (isFresh && parsed?.countryCode) {
+          setIsGhana(parsed.countryCode === 'GH');
+          setCountryDetected(true);
+          return;
+        }
+      } catch (error) {
+        console.log('Failed to parse cached country detection');
+      }
+    }
+
     if (storedIsGhana !== null) {
       setIsGhana(storedIsGhana === 'true');
       setCountryDetected(true);
-    } else {
-      detect();
     }
+
+    detect();
   }, []);
 
   // Save language preference

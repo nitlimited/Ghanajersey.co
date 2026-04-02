@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Heart, Trash2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Header, Footer } from "./LandingPage";
-import { useAuth, useCart, API } from "../App";
+import { useAuth, useCart, API, getProductPath } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -96,7 +96,7 @@ const WishlistPage = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {wishlist.map((product) => (
               <div key={product.product_id} className="group" data-testid={`wishlist-item-${product.product_id}`}>
-                <Link to={`/products/${product.product_id}`} className="block relative">
+                <Link to={getProductPath(product)} className="block relative">
                   <div className="aspect-[3/4] bg-gray-100 overflow-hidden">
                     <img
                       src={product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=400"}
@@ -106,7 +106,7 @@ const WishlistPage = () => {
                   </div>
                 </Link>
                 <div className="mt-4">
-                  <Link to={`/products/${product.product_id}`}>
+                  <Link to={getProductPath(product)}>
                     <h3 className="font-heading text-sm tracking-wide uppercase group-hover:text-ashanti-gold transition-colors">
                       {product.name}
                     </h3>
