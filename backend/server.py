@@ -4004,52 +4004,56 @@ async def startup_event():
         init_storage()
     except Exception as e:
         logger.error(f"Storage init failed: {e}")
-    
-    # Create default admin user if not exists
-    admin_email = "easante@nitlimited.com"
-    admin = await db.users.find_one({"email": admin_email})
-    
-    if not admin:
-        admin_doc = {
-            "user_id": f"user_{uuid.uuid4().hex[:12]}",
-            "email": admin_email,
-            "password": hash_password("admin123"),
-            "name": "Admin",
-            "role": "admin",
-            "picture": None,
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "vendor_profile": None
-        }
-        await db.users.insert_one(admin_doc)
-        logger.info("Default admin user created")
-    
-    # Create indexes
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("user_id", unique=True)
-    await db.products.create_index("product_id", unique=True)
-    await db.products.create_index("slug", unique=True)
-    await db.products.create_index("vendor_id")
-    await db.products.create_index("status")
-    await db.blogs.create_index("blog_id", unique=True)
-    await db.blogs.create_index("slug", unique=True)
-    await db.blogs.create_index("is_published")
-    await db.orders.create_index("order_id", unique=True)
-    await db.orders.create_index("customer_id")
-    await db.login_challenges.create_index("challenge_id", unique=True)
-    await db.login_challenges.create_index("expires_at")
-    
-    logger.info("Database indexes created")
+    try:
+        await db.command("ping")
+        logger.info("Database connection verified during startup")
 
-    await db.user_activity.create_index("user_id")
-    await db.user_activity.create_index([("user_id", 1), ("action", 1)])
+        # Create default admin user if not exists
+        admin_email = "easante@nitlimited.com"
+        admin = await db.users.find_one({"email": admin_email})
 
-    existing_products = await db.products.find({}, {"_id": 0, "product_id": 1, "name": 1, "slug": 1}).to_list(5000)
-    for product in existing_products:
-        if product.get("slug"):
-            continue
-        slug = await ensure_unique_product_slug(product.get("name") or product["product_id"], existing_product_id=product["product_id"])
-        await db.products.update_one({"product_id": product["product_id"]}, {"$set": {"slug": slug}})
+        if not admin:
+            admin_doc = {
+                "user_id": f"user_{uuid.uuid4().hex[:12]}",
+                "email": admin_email,
+                "password": hash_password("admin123"),
+                "name": "Admin",
+                "role": "admin",
+                "picture": None,
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "vendor_profile": None
+            }
+            await db.users.insert_one(admin_doc)
+            logger.info("Default admin user created")
+
+        # Create indexes
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("user_id", unique=True)
+        await db.products.create_index("product_id", unique=True)
+        await db.products.create_index("slug", unique=True)
+        await db.products.create_index("vendor_id")
+        await db.products.create_index("status")
+        await db.blogs.create_index("blog_id", unique=True)
+        await db.blogs.create_index("slug", unique=True)
+        await db.blogs.create_index("is_published")
+        await db.orders.create_index("order_id", unique=True)
+        await db.orders.create_index("customer_id")
+        await db.login_challenges.create_index("challenge_id", unique=True)
+        await db.login_challenges.create_index("expires_at")
+        await db.user_activity.create_index("user_id")
+        await db.user_activity.create_index([("user_id", 1), ("action", 1)])
+
+        logger.info("Database indexes created")
+
+        existing_products = await db.products.find({}, {"_id": 0, "product_id": 1, "name": 1, "slug": 1}).to_list(5000)
+        for product in existing_products:
+            if product.get("slug"):
+                continue
+            slug = await ensure_unique_product_slug(product.get("name") or product["product_id"], existing_product_id=product["product_id"])
+            await db.products.update_one({"product_id": product["product_id"]}, {"$set": {"slug": slug}})
+    except Exception as e:
+        logger.error(f"Database startup initialization failed: {e}")
 
 
 @app.on_event("shutdown")

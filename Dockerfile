@@ -27,7 +27,7 @@ COPY --from=frontend-builder /app/frontend/build /app/frontend/build
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=4).read()" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/live', timeout=4).read()" || exit 1
 
 CMD ["uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "8000"]
