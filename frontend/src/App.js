@@ -43,7 +43,14 @@ const normalizeAppPath = (value, fallback) => {
 const ADMIN_PORTAL_PATH = normalizeAppPath(process.env.REACT_APP_ADMIN_PORTAL_PATH, "/control-room");
 const ADMIN_LOGIN_PATH = `${ADMIN_PORTAL_PATH}/login`;
 const GUEST_CART_KEY = "bst_guest_cart";
-const getProductPath = (product) => `/products/${product?.slug || product?.product_id || ""}`;
+const getProductPath = (product) => {
+  const productId = product?.product_id || "";
+  const slug = product?.slug || productId;
+  if (!productId) {
+    return `/products/${slug}`;
+  }
+  return `/products/${slug}/${productId}`;
+};
 
 // Auth Context
 const AuthContext = createContext(null);
@@ -427,6 +434,7 @@ function AppRouter() {
       <Route path="/products/retro-ghana-jersey" element={<ProductsPage forcedCategory="retro" />} />
       <Route path="/products/creative-ghana-jersey" element={<ProductsPage forcedCategory="creative-designer" />} />
       <Route path="/products/local-club-ghana-jersey" element={<ProductsPage forcedCategory="local-club" />} />
+      <Route path="/products/:productSlug/:productId" element={<ProductDetailPage />} />
       <Route path="/products/:productId" element={<ProductDetailPage />} />
       <Route path="/cart" element={<CartPage />} />
       <Route path="/wishlist" element={

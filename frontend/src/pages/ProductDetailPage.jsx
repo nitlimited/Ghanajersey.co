@@ -14,7 +14,7 @@ import axios from "axios";
 import SEO from "../components/SEO";
 
 const ProductDetailPage = () => {
-  const { productId: productSlug } = useParams();
+  const { productSlug, productId } = useParams();
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [designerProducts, setDesignerProducts] = useState([]);
@@ -98,7 +98,8 @@ const ProductDetailPage = () => {
     const fetchProduct = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`${API}/products/${productSlug}`);
+        const productLookup = productId || productSlug;
+        const response = await axios.get(`${API}/products/${productLookup}`);
         setProduct(response.data);
         setVoteCount(response.data.vote_count || 0);
         if (response.data.sizes?.length > 0) {
