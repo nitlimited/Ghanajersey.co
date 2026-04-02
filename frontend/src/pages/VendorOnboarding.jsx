@@ -15,6 +15,12 @@ import { useAuth, API } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
 
+const IMAGE_FORMAT_HELP = "JPG, JPEG, PNG, WEBP";
+const MAX_IMAGE_SIZE_MB = 5;
+const ONBOARDING_MIN_SIZE = "1000 x 1000 px";
+const PRODUCT_MIN_SIZE = "1200 x 1500 px";
+const PRODUCT_RECOMMENDED_SIZE = "1600 x 2000 px";
+
 const VendorOnboarding = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
@@ -141,6 +147,19 @@ const VendorOnboarding = () => {
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to remove image", { id: toastId });
     }
+  };
+
+  const validateOnboardingImageFile = (file) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error(`Allowed formats: ${IMAGE_FORMAT_HELP}`);
+      return false;
+    }
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      toast.error(`Image size must be ${MAX_IMAGE_SIZE_MB}MB or less`);
+      return false;
+    }
+    return true;
   };
 
   const addSocialHandle = () => {
@@ -1052,6 +1071,28 @@ const VendorOnboarding = () => {
                 Upload clear photos to verify your business. These images help us ensure quality standards on the platform.
               </p>
 
+              <div className="border border-ashanti-gold/30 bg-ashanti-gold/5 p-5 space-y-4">
+                <div>
+                  <p className="font-body text-xs uppercase tracking-[0.2em] text-ashanti-gold mb-2">Verification Image Rules</p>
+                  <p className="font-body text-sm text-muted-text">These onboarding images are for vendor verification only, so real-life backgrounds are allowed.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="border border-black/10 bg-white p-3">
+                    <p className="font-body font-semibold">Onboarding upload specs</p>
+                    <p className="font-body text-muted-text mt-1">Formats: {IMAGE_FORMAT_HELP}</p>
+                    <p className="font-body text-muted-text">Max size: {MAX_IMAGE_SIZE_MB}MB per image</p>
+                    <p className="font-body text-muted-text">Minimum: {ONBOARDING_MIN_SIZE}</p>
+                  </div>
+                  <div className="border border-black/10 bg-white p-3">
+                    <p className="font-body font-semibold">Future product listing standard</p>
+                    <p className="font-body text-muted-text mt-1">Front and back product images must use a white background</p>
+                    <p className="font-body text-muted-text">Minimum: {PRODUCT_MIN_SIZE}</p>
+                    <p className="font-body text-muted-text">Recommended: {PRODUCT_RECOMMENDED_SIZE}</p>
+                    <p className="font-body text-muted-text">This keeps all storefront jerseys aligned consistently</p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <Label className="font-body text-sm uppercase tracking-wider mb-3 block">
                   Upload at least 2 photos of jerseys you have produced or sold *
@@ -1066,6 +1107,7 @@ const VendorOnboarding = () => {
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
+                          if (!validateOnboardingImageFile(file)) return;
                           
                           const uploadData = new FormData();
                           uploadData.append('file', file);
@@ -1140,6 +1182,7 @@ const VendorOnboarding = () => {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      if (!validateOnboardingImageFile(file)) return;
                       
                       const uploadData = new FormData();
                       uploadData.append('file', file);

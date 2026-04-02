@@ -17,6 +17,11 @@ import { useAuth, API } from "../App";
 import { toast } from "sonner";
 import axios from "axios";
 
+const IMAGE_FORMAT_HELP = "JPG, JPEG, PNG, WEBP";
+const MAX_IMAGE_SIZE_MB = 5;
+const PRODUCT_MIN_SIZE = "1200 x 1500 px";
+const PRODUCT_RECOMMENDED_SIZE = "1600 x 2000 px";
+
 const VendorDashboard = () => {
   const { user, token } = useAuth();
   const navigate = useNavigate();
@@ -241,13 +246,22 @@ const VendorDashboard = () => {
 
   const handleUploadProductImage = async (index, file) => {
     if (!file) return;
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error(`Allowed formats: ${IMAGE_FORMAT_HELP}`);
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+      toast.error(`Image size must be ${MAX_IMAGE_SIZE_MB}MB or less`);
+      return;
+    }
 
     const uploadData = new FormData();
     uploadData.append("file", file);
     setUploadingImageIndex(index);
 
     try {
-      const res = await axios.post(`${API}/upload/product-image`, uploadData, {
+      const res = await axios.post(`${API}/upload/product-image?slot_index=${index}`, uploadData, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -646,9 +660,31 @@ const VendorDashboard = () => {
 
                 <div>
                   <Label className="font-body text-sm uppercase tracking-wider">Product Images (Saved to R2)</Label>
-                  <p className="font-body text-xs text-muted-text mb-2">Upload front image first, then back for hover effect. Product images are stored in your R2 bucket.</p>
+                  <div className="mt-3 mb-4 border border-ashanti-gold/30 bg-ashanti-gold/5 p-4">
+                    <p className="font-body text-xs uppercase tracking-[0.2em] text-ashanti-gold mb-2">Product Image Rules</p>
+                    <p className="font-body text-sm text-muted-text">The first 2 product images are required and must show the jersey on a clean white background for storefront consistency.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-sm">
+                      <div className="border border-black/10 bg-white p-3">
+                        <p className="font-body font-semibold">Required images</p>
+                        <p className="font-body text-muted-text mt-1">1. Front view on white background</p>
+                        <p className="font-body text-muted-text">2. Back view on white background</p>
+                      </div>
+                      <div className="border border-black/10 bg-white p-3">
+                        <p className="font-body font-semibold">Technical specs</p>
+                        <p className="font-body text-muted-text mt-1">Formats: {IMAGE_FORMAT_HELP}</p>
+                        <p className="font-body text-muted-text">Max size: {MAX_IMAGE_SIZE_MB}MB per image</p>
+                        <p className="font-body text-muted-text">Minimum: {PRODUCT_MIN_SIZE}</p>
+                        <p className="font-body text-muted-text">Recommended: {PRODUCT_RECOMMENDED_SIZE}</p>
+                        <p className="font-body text-muted-text">Aspect ratio: 4:5</p>
+                      </div>
+                    </div>
+                    <p className="font-body text-xs text-muted-text mt-3">Additional detail or lifestyle images may use other backgrounds, but the first two uploads must stay white-background and full-jersey.</p>
+                  </div>
                   {productForm.images.map((img, index) => (
                     <div key={index} className="mt-2 space-y-2 border border-black/10 p-3">
+                      <p className="font-body text-xs uppercase tracking-wider text-muted-text">
+                        {index === 0 ? "Required: Front view on white background" : index === 1 ? "Required: Back view on white background" : `Optional image ${index + 1}`}
+                      </p>
                       <div className="flex items-center gap-3">
                         <Input
                           type="file"
