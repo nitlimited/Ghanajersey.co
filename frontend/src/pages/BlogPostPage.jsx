@@ -6,12 +6,29 @@ import { API } from "../App";
 import SEO from "../components/SEO";
 import { Button } from "../components/ui/button";
 
-const renderContent = (content) =>
-  (content || "").split(/\n{2,}/).filter(Boolean).map((paragraph, index) => (
-    <p key={index} className="font-body text-base md:text-lg leading-8 text-black/85 mb-6 whitespace-pre-line">
-      {paragraph}
-    </p>
-  ));
+const sanitizeBlogHtml = (content) => {
+  if (!content) return "";
+
+  let html = content;
+  html = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
+  html = html.replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "");
+  html = html.replace(/\son\w+="[^"]*"/gi, "");
+  html = html.replace(/\son\w+='[^']*'/gi, "");
+  html = html.replace(/javascript:/gi, "");
+
+  const allowedTags = /<\/?(p|br|strong|em|h2|h3|ul|ol|li|blockquote|a)\b[^>]*>/gi;
+  const sanitized = html.replace(/<[^>]+>/g, (tag) => (tag.match(allowedTags) ? tag : ""));
+
+  if (sanitized.includes("<")) {
+    return sanitized;
+  }
+
+  return sanitized
+    .split(/\n{2,}/)
+    .filter(Boolean)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br />")}</p>`)
+    .join("");
+};
 
 const BlogPostPage = () => {
   const { slug } = useParams();
@@ -124,9 +141,10 @@ const BlogPostPage = () => {
           </div>
         )}
 
-        <div className="mt-10">
-          {renderContent(post.content)}
-        </div>
+        <div
+          className="mt-10 prose prose-neutral max-w-none [&_h2]:font-heading [&_h2]:text-2xl [&_h2]:tracking-wide [&_h2]:uppercase [&_h2]:mt-10 [&_h2]:mb-4 [&_h3]:font-heading [&_h3]:text-xl [&_h3]:tracking-wide [&_h3]:uppercase [&_h3]:mt-8 [&_h3]:mb-3 [&_p]:font-body [&_p]:text-base [&_p]:md:text-lg [&_p]:leading-8 [&_p]:text-black/85 [&_p]:mb-6 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-6 [&_li]:font-body [&_li]:text-base [&_li]:leading-8 [&_blockquote]:border-l-4 [&_blockquote]:border-ashanti-gold [&_blockquote]:pl-5 [&_blockquote]:italic [&_blockquote]:text-black/70 [&_blockquote]:my-6 [&_a]:text-black [&_a]:underline"
+          dangerouslySetInnerHTML={{ __html: sanitizeBlogHtml(post.content) }}
+        />
 
         {post.tags?.length > 0 && (
           <div className="mt-10 pt-8 border-t border-black/10 flex flex-wrap gap-2">

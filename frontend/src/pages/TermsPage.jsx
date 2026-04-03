@@ -125,6 +125,30 @@ const sections = [
   }
 ];
 
+const sectionIdMap = {
+  "1. Overview": "overview",
+  "2. Marketplace Role": "marketplace-role",
+  "3. Eligibility And Accounts": "eligibility-accounts",
+  "4. Customer Orders": "customer-orders",
+  "5. Pricing And Currency": "pricing-currency",
+  "6. Payments": "payments",
+  "7. Shipping And Fulfillment": "shipping-fulfillment",
+  "8. Vendor Obligations": "vendor-obligations",
+  "9. Vendor Approval, Suspension, And Removal": "vendor-approval",
+  "10. Fees And Payouts": "vendor-payouts",
+  "11. Returns, Refunds, And Disputes": "returns-refunds-disputes",
+  "12. Content, Images, And Intellectual Property": "content-intellectual-property",
+  "13. Acceptable Use": "acceptable-use",
+  "14. Communications": "communications",
+  "15. Privacy": "privacy",
+  "16. Warranties And Disclaimers": "warranties-disclaimers",
+  "17. Limitation Of Liability": "limitation-of-liability",
+  "18. Indemnity": "indemnity",
+  "19. Changes To The Service Or Terms": "changes-to-service-terms",
+  "20. Governing Law": "governing-law",
+  "21. Contact": "contact"
+};
+
 const TermsPage = () => {
   return (
     <div className="min-h-screen bg-bone-white" data-testid="terms-page">
@@ -142,7 +166,7 @@ const TermsPage = () => {
 
         <div className="space-y-6">
           {sections.map((section) => (
-            <section key={section.title} className="border border-black/10 bg-white p-6 md:p-8">
+            <section key={section.title} id={sectionIdMap[section.title]} className="border border-black/10 bg-white p-6 md:p-8">
               <h2 className="font-heading text-xl md:text-2xl tracking-wide uppercase mb-4">{section.title}</h2>
               {section.body && (
                 <p className="font-body text-sm md:text-base text-muted-text leading-relaxed">{section.body}</p>

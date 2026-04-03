@@ -105,7 +105,7 @@ const SellYourJerseyPage = () => {
       </section>
 
       {/* Payment Information */}
-      <section className="py-20 px-6 md:px-12 bg-white">
+      <section id="payout-policy" className="py-20 px-6 md:px-12 bg-white">
         <div className="max-w-6xl mx-auto">
           <h2 className="font-heading text-2xl md:text-3xl text-center mb-4">How You Get Paid</h2>
           <p className="font-body text-center text-muted-text mb-16 max-w-xl mx-auto">
@@ -162,7 +162,7 @@ const SellYourJerseyPage = () => {
       </section>
 
       {/* Requirements */}
-      <section className="py-20 px-6 md:px-12 bg-white">
+      <section id="listing-requirements" className="py-20 px-6 md:px-12 bg-white">
         <div className="max-w-4xl mx-auto">
           <h2 className="font-heading text-2xl md:text-3xl text-center mb-12">Listing Requirements</h2>
           

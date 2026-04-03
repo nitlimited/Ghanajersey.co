@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Pencil, Trash2, ExternalLink, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, ExternalLink, FileText, Bold, Italic, Heading2, Heading3, List, Quote, Link2, Eye } from "lucide-react";
 import axios from "axios";
 import { Header, Footer } from "./LandingPage";
 import { useAuth, API, ADMIN_PORTAL_PATH } from "../App";
@@ -29,6 +29,20 @@ const emptyForm = {
   is_published: false
 };
 
+const sanitizeBlogHtml = (content) => {
+  if (!content) return "";
+
+  let html = content;
+  html = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
+  html = html.replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "");
+  html = html.replace(/\son\w+="[^"]*"/gi, "");
+  html = html.replace(/\son\w+='[^']*'/gi, "");
+  html = html.replace(/javascript:/gi, "");
+
+  const allowedTags = /<\/?(p|br|strong|em|h2|h3|ul|ol|li|blockquote|a)\b[^>]*>/gi;
+  return html.replace(/<[^>]+>/g, (tag) => (tag.match(allowedTags) ? tag : ""));
+};
+
 const AdminBlogPage = () => {
   const { token } = useAuth();
   const [posts, setPosts] = useState([]);
@@ -36,6 +50,7 @@ const AdminBlogPage = () => {
   const [saving, setSaving] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const contentRef = useRef(null);
 
   const fetchPosts = async () => {
     try {
@@ -132,6 +147,62 @@ const AdminBlogPage = () => {
     }
   };
 
+  const updateContent = (nextContent, selectionStart = null, selectionEnd = null) => {
+    setForm((prev) => ({ ...prev, content: nextContent }));
+    requestAnimationFrame(() => {
+      if (!contentRef.current) return;
+      contentRef.current.focus();
+      if (selectionStart !== null && selectionEnd !== null) {
+        contentRef.current.setSelectionRange(selectionStart, selectionEnd);
+      }
+    });
+  };
+
+  const wrapSelection = (before, after = "", placeholder = "Text") => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = form.content.slice(start, end) || placeholder;
+    const nextContent = `${form.content.slice(0, start)}${before}${selected}${after}${form.content.slice(end)}`;
+    updateContent(nextContent, start + before.length, start + before.length + selected.length);
+  };
+
+  const insertBlock = (template, placeholder = "") => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = form.content.slice(start, end) || placeholder;
+    const block = typeof template === "function" ? template(selected) : template;
+    const nextContent = `${form.content.slice(0, start)}${block}${form.content.slice(end)}`;
+    const cursor = start + block.length;
+    updateContent(nextContent, cursor, cursor);
+  };
+
+  const insertLink = () => {
+    const url = window.prompt("Enter the link URL", "https://");
+    if (!url) return;
+    const textarea = contentRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = form.content.slice(start, end) || "Link text";
+    const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${selected}</a>`;
+    const nextContent = `${form.content.slice(0, start)}${linkHtml}${form.content.slice(end)}`;
+    updateContent(nextContent, start + linkHtml.length, start + linkHtml.length);
+  };
+
+  const formattingButtons = [
+    { label: "Bold", icon: Bold, action: () => wrapSelection("<strong>", "</strong>") },
+    { label: "Italic", icon: Italic, action: () => wrapSelection("<em>", "</em>") },
+    { label: "H2", icon: Heading2, action: () => wrapSelection("<h2>", "</h2>", "Section heading") },
+    { label: "H3", icon: Heading3, action: () => wrapSelection("<h3>", "</h3>", "Subheading") },
+    { label: "List", icon: List, action: () => insertBlock((selected) => `<ul>\n  <li>${selected || "List item"}</li>\n</ul>\n`) },
+    { label: "Quote", icon: Quote, action: () => wrapSelection("<blockquote>", "</blockquote>", "Quote") },
+    { label: "Link", icon: Link2, action: insertLink }
+  ];
+
   return (
     <div className="min-h-screen bg-bone-white">
       <Header forceLight={true} stickyAnnouncement={true} />
@@ -187,12 +258,44 @@ const AdminBlogPage = () => {
             </div>
             <div>
               <Label>Article Content</Label>
+              <div className="mt-2 flex flex-wrap gap-2 border border-black/10 bg-bone-white p-3">
+                {formattingButtons.map((button) => {
+                  const Icon = button.icon;
+                  return (
+                    <button
+                      key={button.label}
+                      type="button"
+                      onClick={button.action}
+                      className="inline-flex items-center gap-2 border border-black/10 bg-white px-3 py-2 font-body text-xs uppercase tracking-wide hover:border-black"
+                    >
+                      <Icon size={14} />
+                      {button.label}
+                    </button>
+                  );
+                })}
+              </div>
               <Textarea
+                ref={contentRef}
                 value={form.content}
                 onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))}
                 className="mt-2 min-h-[320px]"
-                placeholder="Write the article body here. Use blank lines between paragraphs."
+                placeholder="Write the article body here. You can use HTML tags like <h2>, <strong>, <em>, <ul>, <blockquote>, and links."
               />
+              <p className="font-body text-xs text-muted-text mt-2">
+                Formatting supported: headings, bold, italic, paragraphs, lists, quotes, line breaks, and links.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Eye size={16} className="text-ashanti-gold" />
+                <h3 className="font-heading text-sm tracking-wide uppercase">Live Preview</h3>
+              </div>
+              <div className="border border-black/10 bg-bone-white p-5">
+                <div
+                  className="blog-editor-preview prose prose-neutral max-w-none [&_h2]:font-heading [&_h2]:text-2xl [&_h2]:tracking-wide [&_h2]:uppercase [&_h2]:mt-8 [&_h2]:mb-4 [&_h3]:font-heading [&_h3]:text-xl [&_h3]:tracking-wide [&_h3]:uppercase [&_h3]:mt-6 [&_h3]:mb-3 [&_p]:font-body [&_p]:text-sm [&_p]:leading-7 [&_p]:text-black/80 [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-4 [&_li]:font-body [&_li]:text-sm [&_li]:leading-7 [&_blockquote]:border-l-4 [&_blockquote]:border-ashanti-gold [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-black/70 [&_a]:text-black [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: sanitizeBlogHtml(form.content) || "<p>Preview your formatted article here.</p>" }}
+                />
+              </div>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div>

@@ -148,6 +148,18 @@ const VendorDashboard = () => {
     }
   };
 
+  const handleContactAdmin = () => {
+    window.location.href = "mailto:info@ghanajersey.co?subject=Vendor%20Support%20Request";
+  };
+
+  const handleReadGuidelines = () => {
+    navigate("/sell#listing-requirements");
+  };
+
+  const handleViewPayoutDetails = () => {
+    navigate("/terms#vendor-payouts");
+  };
+
   const handleSubmitProduct = async (e) => {
     e.preventDefault();
 
@@ -1340,7 +1352,7 @@ const VendorDashboard = () => {
                 <p className="font-body text-sm text-muted-text mb-4">
                   Need help with your store? Our support team is here to assist you.
                 </p>
-                <Button className="w-full bg-black hover:bg-ashanti-gold hover:text-black">
+                <Button className="w-full bg-black hover:bg-ashanti-gold hover:text-black" onClick={handleContactAdmin}>
                   Contact Admin
                 </Button>
               </div>
@@ -1359,7 +1371,7 @@ const VendorDashboard = () => {
                   <li>• Respond to orders within 24 hours</li>
                   <li>• Ship within 3 business days</li>
                 </ul>
-                <Button variant="outline" className="w-full border-black">
+                <Button variant="outline" className="w-full border-black" onClick={handleReadGuidelines}>
                   Read Full Guidelines
                 </Button>
               </div>
@@ -1378,7 +1390,7 @@ const VendorDashboard = () => {
                   <li>• Weekly payout schedule</li>
                   <li>• Minimum payout: $50</li>
                 </ul>
-                <Button variant="outline" className="w-full border-black">
+                <Button variant="outline" className="w-full border-black" onClick={handleViewPayoutDetails}>
                   View Payout Details
                 </Button>
               </div>
