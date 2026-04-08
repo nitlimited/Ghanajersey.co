@@ -44,7 +44,20 @@ const AuthCallback = () => {
         if (user.role === "admin") {
           navigate(ADMIN_PORTAL_PATH, { replace: true, state: { user } });
         } else if (user.role === "vendor") {
-          navigate('/vendor', { replace: true, state: { user } });
+          try {
+            const statusRes = await axios.get(`${API}/vendor/onboarding-status`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (statusRes.data.vendor_email_verified === false || statusRes.data.vendor_status === "pending_email_verification") {
+              navigate('/vendor/verify-email', { replace: true, state: { email: user.email } });
+            } else if (statusRes.data.vendor_status === "approved") {
+              navigate('/vendor', { replace: true, state: { user } });
+            } else {
+              navigate('/vendor/onboarding', { replace: true, state: { user } });
+            }
+          } catch (error) {
+            navigate('/vendor', { replace: true, state: { user } });
+          }
         } else {
           navigate('/dashboard', { replace: true, state: { user } });
         }

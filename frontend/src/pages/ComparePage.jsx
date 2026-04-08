@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Header, Footer } from "./LandingPage";
 import { useCart, API, getProductPath } from "../App";
+import { useLocalization } from "../localization";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -16,6 +17,7 @@ const ComparePage = () => {
   const [selectedSizes, setSelectedSizes] = useState(["", ""]);
   const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
+  const { formatPrice } = useLocalization();
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -81,7 +83,7 @@ const ComparePage = () => {
   };
 
   const compareFields = [
-    { key: "price", label: "Price", format: (p) => `${p.currency} ${p.price.toFixed(2)}` },
+    { key: "price", label: "Price", format: (p) => formatPrice(p.price, p.price_ghs) },
     { key: "category", label: "Category", format: (p) => p.category.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase()) },
     { key: "jersey_type", label: "Type", format: (p) => p.jersey_type === "original" ? "Original" : "Fan Made" },
     { key: "sizes", label: "Sizes Available", format: (p) => p.sizes.join(", ") },
@@ -90,6 +92,14 @@ const ComparePage = () => {
     { key: "vote_count", label: "Votes", format: (p) => `${p.vote_count || 0} votes` },
     { key: "vendor_name", label: "Designer", format: (p) => p.vendor_name || "Unknown" },
   ];
+
+  const getProductImage = (product) => {
+    if (!product) return null;
+    if (Array.isArray(product.images) && product.images.length > 0) {
+      return product.images[0];
+    }
+    return product.image || null;
+  };
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="compare-page">
@@ -117,17 +127,23 @@ const ComparePage = () => {
                   
                   <Link to={getProductPath(selectedProducts[index])}>
                     <div className="aspect-square bg-gray-100 overflow-hidden mb-4">
-                      <img
-                        src={selectedProducts[index].images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=400"}
-                        alt={selectedProducts[index].name}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform"
-                      />
+                      {getProductImage(selectedProducts[index]) ? (
+                        <img
+                          src={getProductImage(selectedProducts[index])}
+                          alt={selectedProducts[index].name}
+                          className="w-full h-full object-cover hover:scale-105 transition-transform"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center p-4 text-center bg-gradient-to-b from-white to-stone-200">
+                          <p className="font-body text-sm text-muted-text">Image unavailable</p>
+                        </div>
+                      )}
                     </div>
                   </Link>
                   
                   <h3 className="font-heading text-lg mb-2">{selectedProducts[index].name}</h3>
                   <p className="font-body text-2xl font-semibold text-ashanti-gold mb-4">
-                    {selectedProducts[index].currency} {selectedProducts[index].price.toFixed(2)}
+                    {formatPrice(selectedProducts[index].price, selectedProducts[index].price_ghs)}
                   </p>
 
                   {/* Size Selection */}

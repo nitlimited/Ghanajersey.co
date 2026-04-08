@@ -40,7 +40,16 @@ export const UserActivityProvider = ({ children }) => {
     
     if (storedViewed) {
       try {
-        setRecentlyViewed(JSON.parse(storedViewed));
+        const parsed = JSON.parse(storedViewed);
+        const normalized = Array.isArray(parsed)
+          ? parsed.map((item) => ({
+              ...item,
+              images: Array.isArray(item.images) && item.images.length > 0
+                ? item.images
+                : (item.image ? [item.image] : [])
+            }))
+          : [];
+        setRecentlyViewed(normalized);
       } catch (e) {
         console.error('Failed to parse recently viewed:', e);
       }
@@ -70,8 +79,10 @@ export const UserActivityProvider = ({ children }) => {
     const viewedItem = {
       product_id: product.product_id,
       name: product.name,
+      slug: product.slug,
       category: product.category,
       image: product.images?.[0],
+      images: Array.isArray(product.images) ? product.images : (product.images?.[0] ? [product.images[0]] : []),
       price: product.price,
       price_ghs: product.price_ghs,
       viewed_at: new Date().toISOString()

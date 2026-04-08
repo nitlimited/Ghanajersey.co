@@ -23,6 +23,7 @@ import TermsPage from "./pages/TermsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import ComparePage from "./pages/ComparePage";
 import VendorOnboarding from "./pages/VendorOnboarding";
+import VendorEmailVerificationPage from "./pages/VendorEmailVerificationPage";
 import PaymentCallbackPage from "./pages/PaymentCallbackPage";
 import BlogPage from "./pages/BlogPage";
 import BlogPostPage from "./pages/BlogPostPage";
@@ -120,11 +121,13 @@ const AuthProvider = ({ children }) => {
       return response.data;
     }
 
-    const { token: newToken, user: userData } = response.data;
-    localStorage.setItem("auth_token", newToken);
-    setToken(newToken);
-    setUser(userData);
-    return userData;
+    if (response.data.token && response.data.user) {
+      localStorage.setItem("auth_token", response.data.token);
+      setToken(response.data.token);
+      setUser(response.data.user);
+    }
+
+    return response.data;
   };
 
   const verifyVendorLogin2FA = async (challengeId, code) => {
@@ -141,11 +144,12 @@ const AuthProvider = ({ children }) => {
 
   const register = async (email, password, name, role = "customer") => {
     const response = await axios.post(`${API}/auth/register`, { email, password, name, role });
-    const { token: newToken, user: userData } = response.data;
-    localStorage.setItem("auth_token", newToken);
-    setToken(newToken);
-    setUser(userData);
-    return userData;
+    if (response.data.token && response.data.user) {
+      localStorage.setItem("auth_token", response.data.token);
+      setToken(response.data.token);
+      setUser(response.data.user);
+    }
+    return response.data;
   };
 
   const loginWithGoogle = () => {
@@ -466,6 +470,7 @@ function AppRouter() {
           <VendorOnboarding />
         </ProtectedRoute>
       } />
+      <Route path="/vendor/verify-email" element={<VendorEmailVerificationPage />} />
       <Route path={ADMIN_PORTAL_PATH} element={
         <ProtectedRoute allowedRoles={["admin"]}>
           <AdminDashboard />

@@ -46,6 +46,9 @@ const AuthPage = ({ mode = "vendor" }) => {
       const response = await axios.get(`${API}/vendor/onboarding-status`, {
         headers: { Authorization: `Bearer ${authToken}` }
       });
+      if (response.data.vendor_email_verified === false || response.data.vendor_status === "pending_email_verification") {
+        return "/vendor/verify-email";
+      }
       return response.data.vendor_status === "approved" ? "/vendor" : "/vendor/onboarding";
     } catch (error) {
       return "/vendor";
@@ -68,7 +71,7 @@ const AuthPage = ({ mode = "vendor" }) => {
         return;
       }
 
-      const user = loginResult;
+      const user = loginResult?.user || loginResult;
       if (isAdminMode && user.role !== "admin") {
         await logout();
         toast.error("This portal is reserved for administrators only");
@@ -78,6 +81,11 @@ const AuthPage = ({ mode = "vendor" }) => {
         await logout();
         toast.error("Please use the private admin portal to sign in");
         navigate("/");
+        return;
+      }
+      if (loginResult?.requires_email_verification) {
+        toast.success("Check your email to verify your vendor account before onboarding");
+        navigate("/vendor/verify-email", { state: { email: user.email } });
         return;
       }
       toast.success(`Welcome back, ${user.name}!`);
@@ -124,7 +132,13 @@ const AuthPage = ({ mode = "vendor" }) => {
 
     setLoading(true);
     try {
-      const user = await register(registerEmail, registerPassword, registerName, "vendor");
+      const result = await register(registerEmail, registerPassword, registerName, "vendor");
+      const user = result?.user || result;
+      if (result?.requires_email_verification) {
+        toast.success("Verification email sent. Please verify your email to continue onboarding.");
+        navigate("/vendor/verify-email", { state: { email: user.email } });
+        return;
+      }
       toast.success(`Welcome, ${user.name}!`);
       navigate(await resolvePostAuthDestination(user));
     } catch (error) {

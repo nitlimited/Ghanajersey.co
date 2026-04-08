@@ -109,17 +109,19 @@ const CheckoutPage = () => {
         shippingAddress.full_name,
         "customer"
       );
+      const customerUser = newUser?.user || newUser;
       const authToken = localStorage.getItem("auth_token");
       if (!authToken) {
         throw new Error("Customer session could not be created");
       }
       await syncGuestCartToServer(authToken);
-      toast.success(`Account created for ${newUser.name}. Continuing to payment.`);
+      toast.success(`Account created for ${customerUser.name}. Continuing to payment.`);
       return authToken;
     } catch (error) {
       if (error.response?.data?.detail === "Email already registered") {
         const existingUser = await login(customerAccount.email, customerAccount.password);
-        if (existingUser.role !== "customer") {
+        const customerUser = existingUser?.user || existingUser;
+        if (customerUser.role !== "customer") {
           throw new Error("This email belongs to a non-customer account. Please use a different email for checkout.");
         }
         const authToken = localStorage.getItem("auth_token");

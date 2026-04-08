@@ -4,6 +4,7 @@ import { Star, Heart, Minus, Plus, ChevronLeft, Share2, ThumbsUp, Shirt } from "
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Header, Footer, ProductCard, MobileBottomNav } from "./LandingPage";
@@ -25,6 +26,9 @@ const ProductDetailPage = () => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [voteCount, setVoteCount] = useState(0);
   const [hasVoted, setHasVoted] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
   // Customization state
   const [wantsCustomization, setWantsCustomization] = useState(false);
   const [customName, setCustomName] = useState("");
@@ -60,8 +64,10 @@ const ProductDetailPage = () => {
     const viewedItem = {
       product_id: productData.product_id,
       name: productData.name,
+      slug: productData.slug,
       category: productData.category,
       image: productData.images?.[0],
+      images: Array.isArray(productData.images) ? productData.images : [],
       price: productData.price,
       price_ghs: productData.price_ghs,
       viewed_at: new Date().toISOString()
@@ -138,7 +144,7 @@ const ProductDetailPage = () => {
 
     fetchProduct();
     window.scrollTo(0, 0);
-  }, [productSlug]);
+  }, [productSlug, productId]);
 
   const handleVote = async () => {
     try {
@@ -206,6 +212,40 @@ const ProductDetailPage = () => {
     }
   };
 
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!user || !token) {
+      toast.error("Please sign in to leave a review");
+      return;
+    }
+
+    if (!reviewComment.trim()) {
+      toast.error("Please write a short review before submitting");
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      await axios.post(`${API}/reviews`, {
+        product_id: product.product_id,
+        rating: reviewRating,
+        comment: reviewComment.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const refreshedProduct = await axios.get(`${API}/products/${product.product_id}`);
+      setProduct(refreshedProduct.data);
+      setReviewComment("");
+      setReviewRating(5);
+      toast.success("Review submitted successfully");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to submit review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bone-white">
@@ -238,6 +278,10 @@ const ProductDetailPage = () => {
       </div>
     );
   }
+
+  const activeImages = Array.isArray(product.images) && product.images.length > 0
+    ? product.images.filter(Boolean)
+    : (product.image ? [product.image] : []);
 
   return (
     <div className="min-h-screen bg-bone-white" data-testid="product-detail-page">
@@ -287,16 +331,25 @@ const ProductDetailPage = () => {
           {/* Images */}
           <div className="space-y-4">
             <div className="aspect-[3/4] bg-gray-100 overflow-hidden">
-              <img
-                src={product.images?.[selectedImage] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=800"}
-                alt={product.name}
-                className="w-full h-full object-cover"
-                data-testid="main-product-image"
-              />
+              {activeImages[selectedImage] ? (
+                <img
+                  src={activeImages[selectedImage]}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                  data-testid="main-product-image"
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-b from-white to-stone-200 flex items-center justify-center text-center p-6">
+                  <div>
+                    <p className="font-heading text-lg uppercase tracking-widest">{product.name}</p>
+                    <p className="font-body text-sm text-muted-text mt-2">Image unavailable</p>
+                  </div>
+                </div>
+              )}
             </div>
-            {product.images?.length > 1 && (
+            {activeImages.length > 1 && (
               <div className="grid grid-cols-4 gap-4">
-                {product.images.map((image, index) => (
+                {activeImages.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
@@ -539,35 +592,104 @@ const ProductDetailPage = () => {
                 )}
               </TabsContent>
               <TabsContent value="reviews" className="pt-6">
-                {product.reviews?.length > 0 ? (
-                  <div className="space-y-6">
-                    {product.reviews.map((review) => (
-                      <div key={review.review_id} className="border-b border-black/10 pb-6">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 bg-black text-white flex items-center justify-center font-heading">
-                            {review.user_name?.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-body text-sm font-medium">{review.user_name}</p>
-                            <div className="flex items-center gap-1">
-                              {[...Array(5)].map((_, i) => (
+                <div className="space-y-8">
+                  <div className="border border-black/10 p-5 md:p-6 bg-white">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+                      <div>
+                        <h3 className="font-heading text-lg uppercase tracking-wide">Ratings & Reviews</h3>
+                        <p className="font-body text-sm text-muted-text mt-2">
+                          Share your feedback to help other shoppers choose the right Ghana jersey.
+                        </p>
+                      </div>
+                      <div className="text-left md:text-right">
+                        <p className="font-heading text-2xl">{product.rating?.toFixed?.(1) || "0.0"}</p>
+                        <p className="font-body text-sm text-muted-text">{product.review_count || 0} total reviews</p>
+                      </div>
+                    </div>
+
+                    {user ? (
+                      <form onSubmit={handleSubmitReview} className="space-y-4">
+                        <div>
+                          <Label className="font-body text-sm uppercase tracking-wider">Your Rating</Label>
+                          <div className="flex items-center gap-2 mt-3">
+                            {[1, 2, 3, 4, 5].map((ratingValue) => (
+                              <button
+                                key={ratingValue}
+                                type="button"
+                                onClick={() => setReviewRating(ratingValue)}
+                                className="transition-transform hover:scale-105"
+                                aria-label={`Rate ${ratingValue} stars`}
+                              >
                                 <Star
-                                  key={i}
-                                  size={12}
-                                  fill={i < review.rating ? "#D4AF37" : "none"}
-                                  className={i < review.rating ? "text-ashanti-gold" : "text-gray-300"}
+                                  size={22}
+                                  fill={ratingValue <= reviewRating ? "#D4AF37" : "none"}
+                                  className={ratingValue <= reviewRating ? "text-ashanti-gold" : "text-gray-300"}
                                 />
-                              ))}
-                            </div>
+                              </button>
+                            ))}
                           </div>
                         </div>
-                        <p className="font-body text-sm text-muted-text">{review.comment}</p>
+                        <div>
+                          <Label className="font-body text-sm uppercase tracking-wider">Your Review</Label>
+                          <Textarea
+                            value={reviewComment}
+                            onChange={(e) => setReviewComment(e.target.value)}
+                            placeholder="Tell shoppers about the fit, quality, print, or delivery experience."
+                            className="mt-3 min-h-[120px] rounded-none border-black/20 focus:border-black"
+                          />
+                        </div>
+                        <Button
+                          type="submit"
+                          disabled={submittingReview}
+                          className="bg-black text-white hover:bg-ashanti-gold hover:text-black font-body uppercase tracking-widest"
+                        >
+                          {submittingReview ? "Submitting..." : "Submit Review"}
+                        </Button>
+                      </form>
+                    ) : (
+                      <div className="bg-bone-white border border-black/10 p-4">
+                        <p className="font-body text-sm text-muted-text">
+                          Sign in to rate this product and leave a review.
+                        </p>
+                        <Link to="/auth" className="inline-block mt-3">
+                          <Button variant="outline" className="border-black font-body uppercase tracking-widest">
+                            Sign In
+                          </Button>
+                        </Link>
                       </div>
-                    ))}
+                    )}
                   </div>
-                ) : (
-                  <p className="font-body text-sm text-muted-text">No reviews yet</p>
-                )}
+
+                  {product.reviews?.length > 0 ? (
+                    <div className="space-y-6">
+                      {product.reviews.map((review) => (
+                        <div key={review.review_id} className="border-b border-black/10 pb-6">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 bg-black text-white flex items-center justify-center font-heading">
+                              {review.user_name?.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-body text-sm font-medium">{review.user_name}</p>
+                              <div className="flex items-center gap-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    size={12}
+                                    fill={i < review.rating ? "#D4AF37" : "none"}
+                                    className={i < review.rating ? "text-ashanti-gold" : "text-gray-300"}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <p className="font-body text-sm text-muted-text">{review.comment}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-body text-sm text-muted-text">No reviews yet. Be the first to review this jersey.</p>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           </div>

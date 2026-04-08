@@ -578,25 +578,37 @@ const Marquee = () => {
 // Product Card Component
 const ProductCard = ({ product }) => {
   const { formatPrice, t } = useLocalization();
-  const primaryImage = product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600";
-  const secondaryImage = product.images?.[1] || product.images?.[0] || "https://images.unsplash.com/photo-1580087256394-dc596e1c8f4f?w=600";
+  const normalizedImages = Array.isArray(product.images) && product.images.length > 0
+    ? product.images.filter(Boolean)
+    : (product.image ? [product.image] : []);
+  const primaryImage = normalizedImages[0] || null;
+  const secondaryImage = normalizedImages[1] || normalizedImages[0] || null;
   
   return (
     <Link to={getProductPath(product)} className="group block" data-testid={`product-card-${product.product_id}`}>
       <div className="relative overflow-hidden border border-transparent hover:border-black transition-all duration-300">
         <div className="aspect-[3/4] overflow-hidden bg-gray-100 relative">
-          {/* Primary Image */}
-          <img
-            src={primaryImage}
-            alt={product.name}
-            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 group-hover:opacity-0"
-          />
-          {/* Secondary Image (shown on hover) */}
-          <img
-            src={secondaryImage}
-            alt={`${product.name} alternate view`}
-            className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100 group-hover:scale-105"
-          />
+          {primaryImage ? (
+            <>
+              <img
+                src={primaryImage}
+                alt={product.name}
+                className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 group-hover:opacity-0"
+              />
+              <img
+                src={secondaryImage}
+                alt={`${product.name} alternate view`}
+                className="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100 group-hover:scale-105"
+              />
+            </>
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-b from-white to-stone-200 flex items-center justify-center p-6 text-center">
+              <div>
+                <p className="font-heading text-base tracking-widest uppercase text-black">{product.name}</p>
+                <p className="font-body text-xs text-muted-text mt-2">Product image coming soon</p>
+              </div>
+            </div>
+          )}
         </div>
         {product.featured && (
           <span className="absolute top-4 left-4 bg-ashanti-gold text-black px-3 py-1 font-body text-xs font-semibold tracking-wide z-10">
@@ -675,7 +687,15 @@ const LandingPage = () => {
         if (stored) {
           try {
             const parsed = JSON.parse(stored);
-            setRecentlyViewed(parsed.slice(0, 8));
+            const normalized = Array.isArray(parsed)
+              ? parsed.map((item) => ({
+                  ...item,
+                  images: Array.isArray(item.images) && item.images.length > 0
+                    ? item.images
+                    : (item.image ? [item.image] : [])
+                }))
+              : [];
+            setRecentlyViewed(normalized.slice(0, 8));
           } catch (e) {}
         }
         return;

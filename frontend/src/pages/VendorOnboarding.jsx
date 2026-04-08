@@ -111,6 +111,11 @@ const VendorOnboarding = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setVendorStatus(res.data.vendor_status);
+
+      if (res.data.vendor_email_verified === false || res.data.vendor_status === "pending_email_verification") {
+        navigate("/vendor/verify-email", { replace: true, state: { email: res.data.email } });
+        return;
+      }
       
       if (res.data.vendor_status === "approved") {
         navigate("/vendor");

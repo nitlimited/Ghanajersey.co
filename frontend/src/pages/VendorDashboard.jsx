@@ -106,6 +106,11 @@ const VendorDashboard = () => {
       
       const status = statusRes.data.vendor_status;
       setVendorStatus(status);
+
+      if (statusRes.data.vendor_email_verified === false || status === "pending_email_verification") {
+        navigate("/vendor/verify-email", { replace: true, state: { email: statusRes.data.email } });
+        return;
+      }
       
       // Redirect unapproved vendors to onboarding
       if (status === "pending_onboarding") {
