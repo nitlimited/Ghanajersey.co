@@ -124,6 +124,22 @@ def get_frontend_base_url(request: Optional[Request] = None) -> str:
         return str(request.base_url).rstrip("/")
     return "https://ghanajersey.co"
 
+def build_vendor_email_verification_link(token: str, request: Optional[Request] = None) -> str:
+    return f"{get_frontend_base_url(request)}/vendor/verify-email?token={token}"
+
+def build_vendor_verification_email(name: str, verification_link: str) -> str:
+    return f"""
+    <div>
+      <h2>Verify your vendor email</h2>
+      <p>Hi {name},</p>
+      <p>Thanks for registering as a vendor on GhanaJersey.co.</p>
+      <p>Please verify your email address to continue to the vendor onboarding process.</p>
+      <p><a href="{verification_link}" style="display:inline-block;padding:12px 20px;background:#000;color:#fff;text-decoration:none;">Verify Email And Continue</a></p>
+      <p>If the button does not work, copy and paste this link into your browser:</p>
+      <p>{verification_link}</p>
+    </div>
+    """
+
 def slugify_text(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
     return slug.strip("-") or f"post-{uuid.uuid4().hex[:8]}"
@@ -610,6 +626,9 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class VendorVerificationResendRequest(BaseModel):
+    email: Optional[EmailStr] = None
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     user_id: str
@@ -1009,6 +1028,12 @@ async def get_current_user(request: Request, session_token: Optional[str] = Cook
     
     raise HTTPException(status_code=401, detail="Invalid token")
 
+async def get_current_user_optional(request: Request, session_token: Optional[str] = Cookie(None)):
+    try:
+        return await get_current_user(request, session_token)
+    except HTTPException:
+        return None
+
 async def get_admin_user(request: Request, session_token: Optional[str] = Cookie(None)):
     user = await get_current_user(request, session_token)
     if user["role"] != "admin":
@@ -1042,6 +1067,7 @@ async def register(user_data: UserCreate):
     
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     hashed_pw = hash_password(user_data.password)
+    vendor_verification_token = secrets.token_urlsafe(32) if user_data.role == "vendor" else None
     
     user_doc = {
         "user_id": user_id,
@@ -1053,7 +1079,10 @@ async def register(user_data: UserCreate):
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "vendor_profile": None,
-        "vendor_status": "pending_onboarding" if user_data.role == "vendor" else None
+        "vendor_status": "pending_email_verification" if user_data.role == "vendor" else None,
+        "vendor_email_verified": False if user_data.role == "vendor" else None,
+        "vendor_email_verification_token": vendor_verification_token,
+        "vendor_email_verified_at": None
     }
     
     await db.users.insert_one(user_doc)
@@ -1075,6 +1104,19 @@ async def register(user_data: UserCreate):
                 "Your customer account has been created successfully."
             ),
         )
+    elif user_data.role == "vendor":
+        verification_link = build_vendor_email_verification_link(vendor_verification_token)
+        email_sent = await send_resend_email(
+            user_data.email,
+            "Verify your vendor email to continue onboarding",
+            build_vendor_verification_email(user_data.name, verification_link),
+            text=(
+                f"Hi {user_data.name}, verify your vendor email to continue onboarding: "
+                f"{verification_link}"
+            ),
+        )
+        if not email_sent:
+            logger.warning("Vendor verification email failed for %s", user_data.email)
     
     token = create_jwt_token(user_id, user_data.role)
     
@@ -1085,7 +1127,8 @@ async def register(user_data: UserCreate):
             "email": user_data.email,
             "name": user_data.name,
             "role": user_data.role
-        }
+        },
+        "requires_email_verification": user_data.role == "vendor"
     }
 
 @api_router.post("/auth/login")
@@ -1098,6 +1141,20 @@ async def login(credentials: UserLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if user["role"] == "vendor":
+        if not user.get("vendor_email_verified", False):
+            token = create_jwt_token(user["user_id"], user["role"])
+            return {
+                "token": token,
+                "requires_email_verification": True,
+                "user": {
+                    "user_id": user["user_id"],
+                    "email": user["email"],
+                    "name": user["name"],
+                    "role": user["role"],
+                    "picture": user.get("picture")
+                }
+            }
+
         if not RESEND_API_KEY:
             raise HTTPException(status_code=503, detail="Vendor two-step verification is not configured")
 
@@ -1149,6 +1206,64 @@ async def login(credentials: UserLogin):
             "picture": user.get("picture")
         }
     }
+
+@api_router.post("/auth/vendor/resend-verification")
+async def resend_vendor_verification_email(
+    payload: VendorVerificationResendRequest,
+    user: Optional[dict] = Depends(get_current_user_optional)
+):
+    target_user = None
+    if user and user.get("role") == "vendor":
+        target_user = user
+    elif payload.email:
+        target_user = await db.users.find_one({"email": payload.email, "role": "vendor"}, {"_id": 0})
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Vendor account not found")
+
+    if target_user.get("vendor_email_verified", False):
+        return {"message": "Vendor email already verified"}
+
+    token = secrets.token_urlsafe(32)
+    await db.users.update_one(
+        {"user_id": target_user["user_id"]},
+        {"$set": {"vendor_email_verification_token": token}}
+    )
+    verification_link = build_vendor_email_verification_link(token)
+    email_sent = await send_resend_email(
+        target_user["email"],
+        "Verify your vendor email to continue onboarding",
+        build_vendor_verification_email(target_user.get("name", "Vendor"), verification_link),
+        text=f"Verify your vendor email to continue onboarding: {verification_link}",
+    )
+    if not email_sent:
+        raise HTTPException(status_code=503, detail="Failed to send verification email")
+
+    return {"message": "Verification email sent"}
+
+@api_router.post("/auth/vendor/verify-email")
+async def verify_vendor_email_token(payload: Dict[str, str]):
+    token = payload.get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Verification token is required")
+
+    user = await db.users.find_one(
+        {"role": "vendor", "vendor_email_verification_token": token},
+        {"_id": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="Verification link is invalid or expired")
+
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {
+            "vendor_email_verified": True,
+            "vendor_email_verified_at": datetime.now(timezone.utc).isoformat(),
+            "vendor_status": "pending_onboarding"
+        }, "$unset": {"vendor_email_verification_token": ""}}
+    )
+
+    return {"message": "Vendor email verified successfully"}
 
 @api_router.post("/auth/login/verify-2fa")
 async def verify_login_2fa(payload: LoginVerify2FA):
@@ -1328,6 +1443,7 @@ async def get_vendor_onboarding_status(user: dict = Depends(get_current_user)):
         "email": user["email"],
         "name": user["name"],
         "vendor_status": vendor_status,  # pending_onboarding, pending_approval, approved, rejected
+        "vendor_email_verified": user.get("vendor_email_verified", True),
         "has_completed_onboarding": onboarding_data is not None,
         "rejection_reason": user.get("rejection_reason")
     }
@@ -1336,6 +1452,8 @@ async def get_vendor_onboarding_status(user: dict = Depends(get_current_user)):
 async def submit_vendor_onboarding(data: VendorOnboardingSubmit, user: dict = Depends(get_current_user)):
     if user.get("role") != "vendor":
         raise HTTPException(status_code=403, detail="Not a vendor account")
+    if not user.get("vendor_email_verified", True):
+        raise HTTPException(status_code=403, detail="Please verify your email before accessing vendor onboarding")
     
     # Check if already submitted
     if user.get("vendor_status") == "pending_approval":
@@ -1387,6 +1505,8 @@ async def upload_vendor_image(
     """Upload an image for vendor onboarding verification"""
     if user.get("role") != "vendor":
         raise HTTPException(status_code=403, detail="Only vendors can upload verification images")
+    if not user.get("vendor_email_verified", True):
+        raise HTTPException(status_code=403, detail="Please verify your email before accessing vendor onboarding")
     
     try:
         return await store_uploaded_image(
@@ -3301,19 +3421,28 @@ async def create_review(review: ReviewCreate, user: dict = Depends(get_current_u
     
     # Allow review without purchase for demo
     
-    review_id = f"review_{uuid.uuid4().hex[:12]}"
-    
+    existing_review = await db.reviews.find_one(
+        {"product_id": review.product_id, "user_id": user["user_id"]},
+        {"_id": 0}
+    )
+
+    review_id = existing_review["review_id"] if existing_review else f"review_{uuid.uuid4().hex[:12]}"
     review_doc = {
         "review_id": review_id,
         "product_id": review.product_id,
         "user_id": user["user_id"],
         "user_name": user["name"],
         "rating": review.rating,
-        "comment": review.comment,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "comment": review.comment.strip(),
+        "created_at": existing_review.get("created_at") if existing_review else datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
-    await db.reviews.insert_one(review_doc)
+
+    await db.reviews.update_one(
+        {"product_id": review.product_id, "user_id": user["user_id"]},
+        {"$set": review_doc},
+        upsert=True
+    )
     
     # Update product rating
     reviews = await db.reviews.find({"product_id": review.product_id}, {"_id": 0}).to_list(1000)
@@ -3324,7 +3453,7 @@ async def create_review(review: ReviewCreate, user: dict = Depends(get_current_u
         {"$set": {"rating": round(avg_rating, 1), "review_count": len(reviews)}}
     )
     
-    return {"review_id": review_id}
+    return {"review_id": review_id, "updated": existing_review is not None}
 
 @api_router.get("/reviews/{product_id}")
 async def get_product_reviews(product_id: str):
