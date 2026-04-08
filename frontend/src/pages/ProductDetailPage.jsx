@@ -27,6 +27,8 @@ const ProductDetailPage = () => {
   const [voteCount, setVoteCount] = useState(0);
   const [hasVoted, setHasVoted] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
+  const [reviewName, setReviewName] = useState("");
+  const [reviewEmail, setReviewEmail] = useState("");
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   // Customization state
@@ -36,6 +38,13 @@ const ProductDetailPage = () => {
   const { user, token } = useAuth();
   const { addToCart } = useCart();
   const { formatPrice, t, currency, getPrice } = useLocalization();
+
+  useEffect(() => {
+    if (user) {
+      setReviewName((prev) => prev || user.name || "");
+      setReviewEmail((prev) => prev || user.email || "");
+    }
+  }, [user]);
 
   // Generate or retrieve device fingerprint for voting
   const getDeviceFingerprint = () => {
@@ -214,8 +223,13 @@ const ProductDetailPage = () => {
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
-    if (!user || !token) {
-      toast.error("Please sign in to leave a review");
+    if (!reviewName.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
+
+    if (!reviewEmail.trim()) {
+      toast.error("Please enter your email address");
       return;
     }
 
@@ -228,16 +242,20 @@ const ProductDetailPage = () => {
     try {
       await axios.post(`${API}/reviews`, {
         product_id: product.product_id,
+        name: reviewName.trim(),
+        email: reviewEmail.trim(),
         rating: reviewRating,
         comment: reviewComment.trim()
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
 
       const refreshedProduct = await axios.get(`${API}/products/${product.product_id}`);
       setProduct(refreshedProduct.data);
       setReviewComment("");
       setReviewRating(5);
+      if (!user) {
+        setReviewName("");
+        setReviewEmail("");
+      }
       toast.success("Review submitted successfully");
     } catch (error) {
       toast.error(error.response?.data?.detail || "Failed to submit review");
@@ -607,57 +625,71 @@ const ProductDetailPage = () => {
                       </div>
                     </div>
 
-                    {user ? (
-                      <form onSubmit={handleSubmitReview} className="space-y-4">
+                    <form onSubmit={handleSubmitReview} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="font-body text-sm uppercase tracking-wider">Your Rating</Label>
-                          <div className="flex items-center gap-2 mt-3">
-                            {[1, 2, 3, 4, 5].map((ratingValue) => (
-                              <button
-                                key={ratingValue}
-                                type="button"
-                                onClick={() => setReviewRating(ratingValue)}
-                                className="transition-transform hover:scale-105"
-                                aria-label={`Rate ${ratingValue} stars`}
-                              >
-                                <Star
-                                  size={22}
-                                  fill={ratingValue <= reviewRating ? "#D4AF37" : "none"}
-                                  className={ratingValue <= reviewRating ? "text-ashanti-gold" : "text-gray-300"}
-                                />
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="font-body text-sm uppercase tracking-wider">Your Review</Label>
-                          <Textarea
-                            value={reviewComment}
-                            onChange={(e) => setReviewComment(e.target.value)}
-                            placeholder="Tell shoppers about the fit, quality, print, or delivery experience."
-                            className="mt-3 min-h-[120px] rounded-none border-black/20 focus:border-black"
+                          <Label className="font-body text-sm uppercase tracking-wider">Your Name</Label>
+                          <Input
+                            value={reviewName}
+                            onChange={(e) => setReviewName(e.target.value)}
+                            placeholder="Kwame"
+                            className="mt-3 rounded-none border-black/20 focus:border-black"
                           />
+                          <p className="font-body text-xs text-muted-text mt-2">
+                            Only your first name will be shown publicly.
+                          </p>
                         </div>
-                        <Button
-                          type="submit"
-                          disabled={submittingReview}
-                          className="bg-black text-white hover:bg-ashanti-gold hover:text-black font-body uppercase tracking-widest"
-                        >
-                          {submittingReview ? "Submitting..." : "Submit Review"}
-                        </Button>
-                      </form>
-                    ) : (
-                      <div className="bg-bone-white border border-black/10 p-4">
-                        <p className="font-body text-sm text-muted-text">
-                          Sign in to rate this product and leave a review.
-                        </p>
-                        <Link to="/auth" className="inline-block mt-3">
-                          <Button variant="outline" className="border-black font-body uppercase tracking-widest">
-                            Sign In
-                          </Button>
-                        </Link>
+                        <div>
+                          <Label className="font-body text-sm uppercase tracking-wider">Email Address</Label>
+                          <Input
+                            type="email"
+                            value={reviewEmail}
+                            onChange={(e) => setReviewEmail(e.target.value)}
+                            placeholder="you@example.com"
+                            className="mt-3 rounded-none border-black/20 focus:border-black"
+                          />
+                          <p className="font-body text-xs text-muted-text mt-2">
+                            Your email is collected for moderation and will not be displayed.
+                          </p>
+                        </div>
                       </div>
-                    )}
+                      <div>
+                        <Label className="font-body text-sm uppercase tracking-wider">Your Rating</Label>
+                        <div className="flex items-center gap-2 mt-3">
+                          {[1, 2, 3, 4, 5].map((ratingValue) => (
+                            <button
+                              key={ratingValue}
+                              type="button"
+                              onClick={() => setReviewRating(ratingValue)}
+                              className="transition-transform hover:scale-105"
+                              aria-label={`Rate ${ratingValue} stars`}
+                            >
+                              <Star
+                                size={22}
+                                fill={ratingValue <= reviewRating ? "#D4AF37" : "none"}
+                                className={ratingValue <= reviewRating ? "text-ashanti-gold" : "text-gray-300"}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="font-body text-sm uppercase tracking-wider">Your Review</Label>
+                        <Textarea
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          placeholder="Tell shoppers about the fit, quality, print, or delivery experience."
+                          className="mt-3 min-h-[120px] rounded-none border-black/20 focus:border-black"
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        disabled={submittingReview}
+                        className="bg-black text-white hover:bg-ashanti-gold hover:text-black font-body uppercase tracking-widest"
+                      >
+                        {submittingReview ? "Submitting..." : "Submit Review"}
+                      </Button>
+                    </form>
                   </div>
 
                   {product.reviews?.length > 0 ? (
