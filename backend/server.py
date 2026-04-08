@@ -817,6 +817,8 @@ class PaystackVerifyResponse(BaseModel):
 # Review Models
 class ReviewCreate(BaseModel):
     product_id: str
+    name: str
+    email: EmailStr
     rating: int = Field(ge=1, le=5)
     comment: str
 
@@ -824,7 +826,6 @@ class ReviewResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     review_id: str
     product_id: str
-    user_id: str
     user_name: str
     rating: int
     comment: str
@@ -3411,18 +3412,15 @@ async def paystack_webhook(request: Request):
 # ==================== REVIEW ROUTES ====================
 
 @api_router.post("/reviews")
-async def create_review(review: ReviewCreate, user: dict = Depends(get_current_user)):
-    # Check if user purchased the product
-    order = await db.orders.find_one({
-        "customer_id": user["user_id"],
-        "items.product_id": review.product_id,
-        "payment_status": "paid"
-    })
-    
-    # Allow review without purchase for demo
-    
+async def create_review(review: ReviewCreate):
+    normalized_email = review.email.strip().lower()
+    cleaned_name = " ".join(review.name.strip().split())
+    if not cleaned_name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    public_name = cleaned_name.split(" ")[0]
+
     existing_review = await db.reviews.find_one(
-        {"product_id": review.product_id, "user_id": user["user_id"]},
+        {"product_id": review.product_id, "reviewer_email": normalized_email},
         {"_id": 0}
     )
 
@@ -3430,8 +3428,9 @@ async def create_review(review: ReviewCreate, user: dict = Depends(get_current_u
     review_doc = {
         "review_id": review_id,
         "product_id": review.product_id,
-        "user_id": user["user_id"],
-        "user_name": user["name"],
+        "reviewer_email": normalized_email,
+        "reviewer_name": cleaned_name,
+        "user_name": public_name,
         "rating": review.rating,
         "comment": review.comment.strip(),
         "created_at": existing_review.get("created_at") if existing_review else datetime.now(timezone.utc).isoformat(),
@@ -3439,7 +3438,7 @@ async def create_review(review: ReviewCreate, user: dict = Depends(get_current_u
     }
 
     await db.reviews.update_one(
-        {"product_id": review.product_id, "user_id": user["user_id"]},
+        {"product_id": review.product_id, "reviewer_email": normalized_email},
         {"$set": review_doc},
         upsert=True
     )
