@@ -24,7 +24,7 @@ import requests
 import boto3
 import stripe
 import secrets
-from PIL import Image
+from PIL import Image, ImageOps
 from urllib.parse import urlparse, urlunparse
 from xml.sax.saxutils import escape as xml_escape
 
@@ -264,8 +264,6 @@ PRODUCT_IMAGE_MIN_WIDTH = 1200
 PRODUCT_IMAGE_MIN_HEIGHT = 1500
 PRODUCT_IMAGE_RECOMMENDED_WIDTH = 1600
 PRODUCT_IMAGE_RECOMMENDED_HEIGHT = 2000
-ONBOARDING_IMAGE_MIN_WIDTH = 1000
-ONBOARDING_IMAGE_MIN_HEIGHT = 1000
 
 def open_image_for_validation(data: bytes) -> Image.Image:
     try:
@@ -314,13 +312,12 @@ def validate_image_upload(
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status_code=400, detail="Allowed image formats: JPG, JPEG, PNG, WEBP")
 
-    if len(data) > MAX_IMAGE_SIZE_BYTES:
-        raise HTTPException(status_code=400, detail="Image size must be 5MB or less")
-
     image = open_image_for_validation(data)
     width, height = image.size
 
     if upload_type == "product":
+        if len(data) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail="Image size must be 5MB or less")
         if width < PRODUCT_IMAGE_MIN_WIDTH or height < PRODUCT_IMAGE_MIN_HEIGHT:
             raise HTTPException(
                 status_code=400,
@@ -337,12 +334,28 @@ def validate_image_upload(
                     status_code=400,
                     detail="Front and back product images must use a clean white background."
                 )
+
+def prepare_product_image_for_storage(data: bytes, content_type: str) -> tuple[bytes, str, str]:
+    image = open_image_for_validation(data)
+    prepared = ImageOps.exif_transpose(image)
+
+    if prepared.mode in ("RGBA", "LA") or (prepared.mode == "P" and "transparency" in prepared.info):
+        background = Image.new("RGBA", prepared.size, (255, 255, 255, 255))
+        background.alpha_composite(prepared.convert("RGBA"))
+        prepared = background.convert("RGB")
     else:
-        if width < ONBOARDING_IMAGE_MIN_WIDTH or height < ONBOARDING_IMAGE_MIN_HEIGHT:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Verification images must be at least {ONBOARDING_IMAGE_MIN_WIDTH}x{ONBOARDING_IMAGE_MIN_HEIGHT}px."
-            )
+        prepared = prepared.convert("RGB")
+
+    prepared = ImageOps.fit(
+        prepared,
+        (PRODUCT_IMAGE_RECOMMENDED_WIDTH, PRODUCT_IMAGE_RECOMMENDED_HEIGHT),
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.5),
+    )
+
+    output = BytesIO()
+    prepared.save(output, format="JPEG", quality=92, optimize=True)
+    return output.getvalue(), "image/jpeg", "jpg"
 
 def init_storage():
     """Initialize S3-compatible storage client once and reuse it."""
@@ -411,15 +424,19 @@ async def store_uploaded_image(
         require_white_background=require_white_background,
     )
 
+    content_type = file.content_type
     ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "jpg"
+    if upload_type == "product":
+        data, content_type, ext = prepare_product_image_for_storage(data, file.content_type)
+
     file_path = f"{APP_NAME}/{folder}/{user_id}/{uuid.uuid4().hex[:12]}.{ext}"
 
-    result = put_object(file_path, data, file.content_type)
+    result = put_object(file_path, data, content_type)
     file_doc = {
         "file_id": str(uuid.uuid4()),
         "storage_path": result["path"],
         "original_filename": file.filename,
-        "content_type": file.content_type,
+        "content_type": content_type,
         "size": result.get("size", len(data)),
         "user_id": user_id,
         "is_deleted": False,
