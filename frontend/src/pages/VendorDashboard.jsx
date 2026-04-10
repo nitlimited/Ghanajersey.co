@@ -753,9 +753,10 @@ const VendorDashboard = () => {
                         <p className="font-body text-muted-text">Minimum: {PRODUCT_MIN_SIZE}</p>
                         <p className="font-body text-muted-text">Recommended: {PRODUCT_RECOMMENDED_SIZE}</p>
                         <p className="font-body text-muted-text">Aspect ratio: 4:5</p>
+                        <p className="font-body text-muted-text">Uploads are auto-cropped to a 4:5 storefront image for consistency</p>
                       </div>
                     </div>
-                    <p className="font-body text-xs text-muted-text mt-3">Additional detail or lifestyle images may use other backgrounds, but the first two uploads must stay white-background and full-jersey.</p>
+                    <p className="font-body text-xs text-muted-text mt-3">Additional detail or lifestyle images may use other backgrounds, but the first two uploads must stay white-background and full-jersey. If your image is not already 4:5, the system will crop it to fit the storefront layout.</p>
                   </div>
                   {productForm.images.map((img, index) => (
                     <div key={index} className="mt-2 space-y-2 border border-black/10 p-3">
