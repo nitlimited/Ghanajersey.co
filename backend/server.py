@@ -206,6 +206,65 @@ async def ensure_unique_product_slug(base_slug: str, existing_product_id: Option
         suffix += 1
         slug = f"{slugify_text(base_slug)}-{suffix}"
 
+async def hide_vendor_products(vendor_id: str, hidden_status: str, admin_user_id: str) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    products = await db.products.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(1000)
+    hidden_count = 0
+
+    for product in products:
+        update_data = {
+            "status": hidden_status,
+            "hidden_by_vendor_status": True,
+            "vendor_hidden_status": hidden_status,
+            "vendor_hidden_at": now,
+            "vendor_hidden_by": admin_user_id
+        }
+        if not product.get("hidden_by_vendor_status"):
+            update_data["status_before_vendor_hold"] = product.get("status", "pending")
+
+        await db.products.update_one(
+            {"product_id": product["product_id"]},
+            {"$set": update_data}
+        )
+        hidden_count += 1
+
+    return hidden_count
+
+async def restore_vendor_products(vendor_id: str, admin_user_id: str) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    products = await db.products.find(
+        {
+            "vendor_id": vendor_id,
+            "hidden_by_vendor_status": True,
+            "status": "vendor_suspended"
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    restored_count = 0
+
+    for product in products:
+        restored_status = product.get("status_before_vendor_hold") or "pending"
+        await db.products.update_one(
+            {"product_id": product["product_id"]},
+            {
+                "$set": {
+                    "status": restored_status,
+                    "vendor_restored_at": now,
+                    "vendor_restored_by": admin_user_id
+                },
+                "$unset": {
+                    "hidden_by_vendor_status": "",
+                    "vendor_hidden_status": "",
+                    "vendor_hidden_at": "",
+                    "vendor_hidden_by": "",
+                    "status_before_vendor_hold": ""
+                }
+            }
+        )
+        restored_count += 1
+
+    return restored_count
+
 def normalize_blog_document(blog: dict, request: Optional[Request] = None) -> dict:
     base_url = get_frontend_base_url(request)
     blog["url"] = f"{base_url}/blog/{blog['slug']}"
@@ -1100,6 +1159,36 @@ async def get_admin_user(request: Request, session_token: Optional[str] = Cookie
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+async def resolve_legacy_vendor_status(user: dict) -> dict:
+    if user.get("role") != "vendor":
+        return user
+
+    vendor_status = user.get("vendor_status")
+    if vendor_status not in [None, "pending_onboarding"]:
+        return user
+
+    if user.get("is_active", True) is False:
+        return user
+
+    product_count = await db.products.count_documents({"vendor_id": user["user_id"]})
+    if product_count == 0:
+        return user
+
+    now = datetime.now(timezone.utc).isoformat()
+    update_data = {
+        "vendor_status": "approved",
+        "vendor_email_verified": True,
+        "is_active": True,
+        "legacy_vendor_auto_approved_at": now,
+        "legacy_vendor_product_count": product_count
+    }
+    await db.users.update_one(
+        {"user_id": user["user_id"], "role": "vendor"},
+        {"$set": update_data}
+    )
+    user.update(update_data)
+    return user
+
 async def get_vendor_user(request: Request, session_token: Optional[str] = Cookie(None)):
     user = await get_current_user(request, session_token)
     if user["role"] not in ["vendor", "admin"]:
@@ -1107,6 +1196,7 @@ async def get_vendor_user(request: Request, session_token: Optional[str] = Cooki
     
     # Check if vendor is approved (admins bypass this check)
     if user["role"] == "vendor":
+        user = await resolve_legacy_vendor_status(user)
         vendor_status = user.get("vendor_status", "pending_onboarding")
         if vendor_status != "approved":
             raise HTTPException(
@@ -1620,6 +1710,8 @@ async def logout(request: Request, session_token: Optional[str] = Cookie(None)):
 async def get_vendor_onboarding_status(user: dict = Depends(get_current_user)):
     if user.get("role") != "vendor":
         raise HTTPException(status_code=403, detail="Not a vendor account")
+
+    user = await resolve_legacy_vendor_status(user)
     
     vendor_status = user.get("vendor_status", "pending_onboarding")
     onboarding_data = user.get("onboarding_data")
@@ -3829,7 +3921,10 @@ async def get_vendor_analytics(user: dict = Depends(get_admin_user)):
             "paid_payout_breakdown": paid_payout_breakdown,
             "total_votes": total_votes,
             "created_at": vendor.get("created_at"),
-            "is_active": vendor.get("is_active", True)
+            "is_active": vendor.get("is_active", True),
+            "vendor_status": vendor.get("vendor_status", "pending_onboarding"),
+            "suspended_at": vendor.get("suspended_at"),
+            "restored_at": vendor.get("restored_at")
         })
     
     return vendor_analytics
@@ -3873,6 +3968,18 @@ async def get_pending_products(user: dict = Depends(get_admin_user)):
 
 @api_router.put("/admin/products/{product_id}/approve")
 async def approve_product(product_id: str, approval: ProductApproval, user: dict = Depends(get_admin_user)):
+    product = await db.products.find_one({"product_id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if approval.status == "approved":
+        vendor = await db.users.find_one(
+            {"user_id": product.get("vendor_id"), "role": "vendor"},
+            {"_id": 0, "user_id": 1, "is_active": 1, "vendor_status": 1}
+        )
+        if not vendor or not vendor.get("is_active", True) or vendor.get("vendor_status") in ["suspended", "deleted"]:
+            raise HTTPException(status_code=400, detail="Cannot approve products for suspended or deleted vendors")
+
     result = await db.products.update_one(
         {"product_id": product_id},
         {"$set": {
@@ -3974,15 +4081,81 @@ async def approve_vendor(user_id: str, approved: bool, rejection_reason: Optiona
 
 @api_router.put("/admin/vendors/{user_id}/status")
 async def update_vendor_status(user_id: str, is_active: bool, user: dict = Depends(get_admin_user)):
-    result = await db.users.update_one(
-        {"user_id": user_id, "role": "vendor"},
-        {"$set": {"is_active": is_active}}
-    )
+    vendor = await db.users.find_one({"user_id": user_id, "role": "vendor"}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    hidden_count = 0
+    restored_count = 0
+
+    if is_active:
+        restored_status = vendor.get("vendor_status_before_suspension")
+        if not restored_status or restored_status in ["suspended", "deleted"]:
+            restored_status = "approved"
+
+        result = await db.users.update_one(
+            {"user_id": user_id, "role": "vendor"},
+            {
+                "$set": {
+                    "is_active": True,
+                    "vendor_status": restored_status,
+                    "restored_at": now,
+                    "restored_by": user["user_id"]
+                },
+                "$unset": {
+                    "vendor_status_before_suspension": "",
+                    "suspended_at": "",
+                    "suspended_by": ""
+                }
+            }
+        )
+        restored_count = await restore_vendor_products(user_id, user["user_id"])
+    else:
+        update_data = {
+            "is_active": False,
+            "vendor_status": "suspended",
+            "suspended_at": now,
+            "suspended_by": user["user_id"]
+        }
+        if vendor.get("vendor_status") != "suspended":
+            update_data["vendor_status_before_suspension"] = vendor.get("vendor_status", "approved")
+
+        result = await db.users.update_one(
+            {"user_id": user_id, "role": "vendor"},
+            {"$set": update_data}
+        )
+        hidden_count = await hide_vendor_products(user_id, "vendor_suspended", user["user_id"])
     
-    if result.modified_count == 0:
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Vendor not found")
     
-    return {"message": "Vendor status updated"}
+    return {
+        "message": f"Vendor {'restored' if is_active else 'suspended'}",
+        "hidden_products": hidden_count,
+        "restored_products": restored_count
+    }
+
+@api_router.delete("/admin/vendors/{user_id}")
+async def delete_vendor_account(user_id: str, user: dict = Depends(get_admin_user)):
+    vendor = await db.users.find_one({"user_id": user_id, "role": "vendor"}, {"_id": 0})
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    hidden_count = await hide_vendor_products(user_id, "vendor_deleted", user["user_id"])
+    await db.vendor_promos.delete_many({"vendor_id": user_id})
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.login_challenges.delete_many({"user_id": user_id})
+    await db.password_resets.delete_many({"user_id": user_id})
+
+    result = await db.users.delete_one({"user_id": user_id, "role": "vendor"})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    return {
+        "message": "Vendor account deleted",
+        "hidden_products": hidden_count
+    }
 
 @api_router.get("/admin/orders")
 async def get_all_orders(user: dict = Depends(get_admin_user)):

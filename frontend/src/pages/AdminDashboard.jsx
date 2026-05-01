@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { 
   LayoutDashboard, Package, Users, ShoppingCart, DollarSign, 
   CheckCircle, XCircle, Star, Clock, TrendingUp, Eye, ChevronDown,
-  Percent, ThumbsUp, AlertCircle, CreditCard, UserPlus, Building, MapPin, Phone
+  Percent, ThumbsUp, AlertCircle, CreditCard, UserPlus, Building, MapPin, Phone,
+  Ban, RotateCcw, Trash2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -118,6 +119,53 @@ const AdminDashboard = () => {
       fetchData();
     } catch (error) {
       toast.error("Failed to update vendor status");
+    }
+  };
+
+  const handleToggleVendorStatus = async (vendor) => {
+    const nextActive = !vendor.is_active;
+    const action = nextActive ? "restore" : "suspend";
+    const message = nextActive
+      ? `Restore ${vendor.brand_name || vendor.name}? Their previously listed jerseys will return to their prior status.`
+      : `Suspend ${vendor.brand_name || vendor.name}? All jerseys from this vendor will be removed from the website.`;
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    try {
+      const response = await axios.put(`${API}/admin/vendors/${vendor.vendor_id}/status?is_active=${nextActive}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const productCount = nextActive ? response.data.restored_products : response.data.hidden_products;
+      toast.success(`Vendor ${nextActive ? "restored" : "suspended"}. ${productCount || 0} jersey listings updated.`);
+      if (selectedVendor === vendor.vendor_id) {
+        await fetchVendorProducts(vendor.vendor_id);
+      }
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || `Failed to ${action} vendor`);
+    }
+  };
+
+  const handleDeleteVendor = async (vendor) => {
+    const vendorLabel = vendor.brand_name || vendor.name || vendor.email;
+    if (!window.confirm(`Delete ${vendorLabel}? This removes the vendor account and takes all their jerseys off the website. This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await axios.delete(`${API}/admin/vendors/${vendor.vendor_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`Vendor deleted. ${response.data.hidden_products || 0} jersey listings removed from the website.`);
+      if (selectedVendor === vendor.vendor_id) {
+        setSelectedVendor(null);
+        setVendorProducts([]);
+      }
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to delete vendor");
     }
   };
 
@@ -395,18 +443,45 @@ const AdminDashboard = () => {
                     <div>
                       <h3 className="font-heading text-lg">{vendor.brand_name || vendor.name}</h3>
                       <p className="font-body text-sm text-muted-text">{vendor.email}</p>
-                      <span className={`inline-block mt-2 px-2 py-1 text-xs font-body ${vendor.is_active ? 'bg-ghana-green/10 text-ghana-green' : 'bg-ghana-red/10 text-ghana-red'}`}>
-                        {vendor.is_active ? 'Active' : 'Inactive'}
+                      <span className={`inline-block mt-2 px-2 py-1 text-xs font-body capitalize ${
+                        vendor.vendor_status === "suspended" || !vendor.is_active
+                          ? 'bg-ghana-red/10 text-ghana-red'
+                          : vendor.vendor_status === "approved"
+                            ? 'bg-ghana-green/10 text-ghana-green'
+                            : 'bg-ashanti-gold/10 text-ashanti-gold'
+                      }`}>
+                        {vendor.vendor_status?.replace(/_/g, " ") || (vendor.is_active ? 'Active' : 'Inactive')}
                       </span>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="border-black"
-                      onClick={() => fetchVendorProducts(vendor.vendor_id)}
-                    >
-                      View Products ({vendor.total_products})
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-black"
+                        onClick={() => fetchVendorProducts(vendor.vendor_id)}
+                      >
+                        <Eye size={14} className="mr-1" />
+                        Products ({vendor.total_products})
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={vendor.is_active ? "border-ashanti-gold text-ashanti-gold" : "border-ghana-green text-ghana-green"}
+                        onClick={() => handleToggleVendorStatus(vendor)}
+                      >
+                        {vendor.is_active ? <Ban size={14} className="mr-1" /> : <RotateCcw size={14} className="mr-1" />}
+                        {vendor.is_active ? "Suspend" : "Restore"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-ghana-red text-ghana-red hover:bg-ghana-red hover:text-white"
+                        onClick={() => handleDeleteVendor(vendor)}
+                      >
+                        <Trash2 size={14} className="mr-1" />
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -462,8 +537,14 @@ const AdminDashboard = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-body text-sm font-medium truncate">{product.name}</p>
                               <p className="font-body text-xs text-muted-text">USD {Number(product.price || 0).toFixed(2)} • GHS {Number(product.price_ghs || 0).toFixed(2)} • {product.stock} in stock</p>
-                              <span className={`text-xs ${product.status === 'approved' ? 'text-ghana-green' : 'text-ashanti-gold'}`}>
-                                {product.status}
+                              <span className={`text-xs ${
+                                product.status === 'approved'
+                                  ? 'text-ghana-green'
+                                  : product.status === 'vendor_suspended' || product.status === 'vendor_deleted'
+                                    ? 'text-ghana-red'
+                                    : 'text-ashanti-gold'
+                              }`}>
+                                {product.status?.replace(/_/g, " ")}
                               </span>
                             </div>
                           </div>
