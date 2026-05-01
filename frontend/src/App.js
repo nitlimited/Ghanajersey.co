@@ -152,8 +152,9 @@ const AuthProvider = ({ children }) => {
     return response.data;
   };
 
-  const loginWithGoogle = () => {
+  const loginWithGoogle = (roleIntent = "customer") => {
     // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+    sessionStorage.setItem("oauth_role_intent", roleIntent);
     const redirectUrl = window.location.origin + '/auth/callback';
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
   };

@@ -63,7 +63,7 @@ const VendorEmailVerificationPage = () => {
   return (
     <div className="min-h-screen bg-bone-white">
       <Header forceLight={true} stickyAnnouncement={true} />
-      <div className="pt-12 pb-24 px-6 md:px-12 max-w-2xl mx-auto">
+      <div className="pt-12 pb-24 px-6 md:px-12 max-w-4xl mx-auto">
         <div className="bg-white border border-black/10 p-8 md:p-12 text-center">
           <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-ashanti-gold/15 flex items-center justify-center">
             {verified ? (
@@ -103,18 +103,18 @@ const VendorEmailVerificationPage = () => {
                   Verification email: <span className="font-semibold">{email}</span>
                 </p>
               )}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="mx-auto flex w-full max-w-3xl flex-col sm:flex-row gap-4 justify-center">
                 <Button
                   onClick={handleResend}
                   disabled={resending}
-                  className="bg-black text-white hover:bg-ashanti-gold hover:text-black px-8 py-6 font-body uppercase tracking-widest"
+                  className="w-full sm:flex-1 bg-black text-white hover:bg-ashanti-gold hover:text-black px-6 py-6 font-body uppercase tracking-wide whitespace-normal leading-snug"
                 >
                   {resending ? "Sending..." : "Resend Verification Email"}
                 </Button>
-                <Link to="/auth">
+                <Link to="/auth" className="w-full sm:flex-1">
                   <Button
                     variant="outline"
-                    className="border-black px-8 py-6 font-body uppercase tracking-widest w-full"
+                    className="border-black px-6 py-6 font-body uppercase tracking-wide w-full whitespace-normal leading-snug"
                   >
                     Back to Vendor Sign In
                   </Button>

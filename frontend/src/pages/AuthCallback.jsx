@@ -26,8 +26,12 @@ const AuthCallback = () => {
       }
 
       try {
+        const roleIntent = sessionStorage.getItem("oauth_role_intent") || "customer";
+        sessionStorage.removeItem("oauth_role_intent");
+
         const response = await axios.post(`${API}/auth/session`, {
-          session_id: sessionId
+          session_id: sessionId,
+          role: roleIntent
         }, {
           withCredentials: true
         });

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from botocore.exceptions import BotoCoreError, ClientError
+from pymongo.errors import DuplicateKeyError
 import os
 import logging
 import json
@@ -127,6 +128,9 @@ def get_frontend_base_url(request: Optional[Request] = None) -> str:
 def build_vendor_email_verification_link(token: str, request: Optional[Request] = None) -> str:
     return f"{get_frontend_base_url(request)}/vendor/verify-email?token={token}"
 
+def build_password_reset_link(token: str, request: Optional[Request] = None) -> str:
+    return f"{get_frontend_base_url(request)}/auth?reset_token={token}"
+
 def build_vendor_verification_email(name: str, verification_link: str) -> str:
     return f"""
     <div>
@@ -139,6 +143,37 @@ def build_vendor_verification_email(name: str, verification_link: str) -> str:
       <p>{verification_link}</p>
     </div>
     """
+
+def build_password_reset_email(name: str, reset_link: str) -> str:
+    return f"""
+    <div>
+      <h2>Reset your GhanaJersey.co password</h2>
+      <p>Hi {name},</p>
+      <p>We received a request to reset the password for your account.</p>
+      <p><a href="{reset_link}" style="display:inline-block;padding:12px 20px;background:#000;color:#fff;text-decoration:none;">Reset Password</a></p>
+      <p>This link expires in 1 hour. If you did not request it, you can safely ignore this email.</p>
+      <p>If the button does not work, copy and paste this link into your browser:</p>
+      <p>{reset_link}</p>
+    </div>
+    """
+
+def normalize_email_address(email: str) -> str:
+    return str(email or "").strip().lower()
+
+def hash_token(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+async def find_user_by_email(email: str, projection: Optional[dict] = None):
+    normalized_email = normalize_email_address(email)
+    if not normalized_email:
+        return None
+    query = {
+        "$or": [
+            {"email_normalized": normalized_email},
+            {"email": {"$regex": f"^{re.escape(normalized_email)}$", "$options": "i"}}
+        ]
+    }
+    return await db.users.find_one(query, projection)
 
 def slugify_text(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower())
@@ -646,6 +681,13 @@ class UserLogin(BaseModel):
 class VendorVerificationResendRequest(BaseModel):
     email: Optional[EmailStr] = None
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    password: str
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
     user_id: str
@@ -1078,8 +1120,11 @@ async def get_vendor_user(request: Request, session_token: Optional[str] = Cooki
 
 @api_router.post("/auth/register")
 async def register(user_data: UserCreate):
-    # Check if user exists
-    existing = await db.users.find_one({"email": user_data.email})
+    email = normalize_email_address(user_data.email)
+    if len(user_data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    existing = await find_user_by_email(email, {"_id": 0, "user_id": 1})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -1089,7 +1134,8 @@ async def register(user_data: UserCreate):
     
     user_doc = {
         "user_id": user_id,
-        "email": user_data.email,
+        "email": email,
+        "email_normalized": email,
         "password": hashed_pw,
         "name": user_data.name,
         "role": user_data.role,
@@ -1103,11 +1149,14 @@ async def register(user_data: UserCreate):
         "vendor_email_verified_at": None
     }
     
-    await db.users.insert_one(user_doc)
+    try:
+        await db.users.insert_one(user_doc)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Email already registered")
 
     if user_data.role == "customer":
         await send_resend_email(
-            user_data.email,
+            email,
             "Welcome to Black Star Threads",
             f"""
             <div>
@@ -1125,7 +1174,7 @@ async def register(user_data: UserCreate):
     elif user_data.role == "vendor":
         verification_link = build_vendor_email_verification_link(vendor_verification_token)
         email_sent = await send_resend_email(
-            user_data.email,
+            email,
             "Verify your vendor email to continue onboarding",
             build_vendor_verification_email(user_data.name, verification_link),
             text=(
@@ -1134,7 +1183,7 @@ async def register(user_data: UserCreate):
             ),
         )
         if not email_sent:
-            logger.warning("Vendor verification email failed for %s", user_data.email)
+            logger.warning("Vendor verification email failed for %s", email)
     
     token = create_jwt_token(user_id, user_data.role)
     
@@ -1142,7 +1191,7 @@ async def register(user_data: UserCreate):
         "token": token,
         "user": {
             "user_id": user_id,
-            "email": user_data.email,
+            "email": email,
             "name": user_data.name,
             "role": user_data.role
         },
@@ -1151,9 +1200,12 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin):
-    user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
+    user = await find_user_by_email(credentials.email, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not user.get("password"):
+        raise HTTPException(status_code=401, detail="Use social sign-in or reset your password")
     
     if not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1234,7 +1286,9 @@ async def resend_vendor_verification_email(
     if user and user.get("role") == "vendor":
         target_user = user
     elif payload.email:
-        target_user = await db.users.find_one({"email": payload.email, "role": "vendor"}, {"_id": 0})
+        target_user = await find_user_by_email(payload.email, {"_id": 0})
+        if target_user and target_user.get("role") != "vendor":
+            target_user = None
 
     if not target_user:
         raise HTTPException(status_code=404, detail="Vendor account not found")
@@ -1258,6 +1312,84 @@ async def resend_vendor_verification_email(
         raise HTTPException(status_code=503, detail="Failed to send verification email")
 
     return {"message": "Verification email sent"}
+
+@api_router.post("/auth/password-reset/request")
+async def request_password_reset(payload: PasswordResetRequest, request: Request):
+    user = await find_user_by_email(payload.email, {"_id": 0})
+    generic_response = {"message": "If an account exists for that email, a password reset link has been sent."}
+
+    if not user:
+        return generic_response
+
+    raw_token = secrets.token_urlsafe(32)
+    reset_doc = {
+        "reset_id": f"reset_{uuid.uuid4().hex[:16]}",
+        "user_id": user["user_id"],
+        "email_normalized": normalize_email_address(user["email"]),
+        "token_hash": hash_token(raw_token),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "used": False
+    }
+
+    await db.password_resets.update_many(
+        {"user_id": user["user_id"], "used": False},
+        {"$set": {"used": True, "superseded_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    await db.password_resets.insert_one(reset_doc)
+
+    reset_link = build_password_reset_link(raw_token, request)
+    email_sent = await send_resend_email(
+        user["email"],
+        "Reset your GhanaJersey.co password",
+        build_password_reset_email(user.get("name", "there"), reset_link),
+        text=f"Reset your GhanaJersey.co password: {reset_link}. This link expires in 1 hour.",
+    )
+    if not email_sent:
+        logger.warning("Password reset email failed for %s", user["email"])
+
+    return generic_response
+
+@api_router.post("/auth/password-reset/confirm")
+async def confirm_password_reset(payload: PasswordResetConfirm):
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    token_hash = hash_token(payload.token)
+    reset_doc = await db.password_resets.find_one(
+        {"token_hash": token_hash, "used": False},
+        {"_id": 0}
+    )
+    if not reset_doc:
+        raise HTTPException(status_code=400, detail="Password reset link is invalid or expired")
+
+    expires_at = reset_doc.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        await db.password_resets.update_one(
+            {"reset_id": reset_doc["reset_id"]},
+            {"$set": {"used": True, "expired_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        raise HTTPException(status_code=400, detail="Password reset link is invalid or expired")
+
+    hashed_pw = hash_password(payload.password)
+    result = await db.users.update_one(
+        {"user_id": reset_doc["user_id"]},
+        {"$set": {"password": hashed_pw, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    await db.password_resets.update_many(
+        {"user_id": reset_doc["user_id"]},
+        {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    await db.user_sessions.delete_many({"user_id": reset_doc["user_id"]})
+
+    return {"message": "Password reset successfully"}
 
 @api_router.post("/auth/vendor/verify-email")
 async def verify_vendor_email_token(payload: Dict[str, str]):
@@ -1331,6 +1463,8 @@ async def exchange_session(request: Request):
     """Exchange Emergent OAuth session_id for session data"""
     body = await request.json()
     session_id = body.get("session_id")
+    requested_role = body.get("role", "customer")
+    new_user_role = "vendor" if requested_role == "vendor" else "customer"
     
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id required")
@@ -1346,20 +1480,24 @@ async def exchange_session(request: Request):
         
         data = response.json()
     
-    email = data.get("email")
+    email = normalize_email_address(data.get("email"))
     name = data.get("name")
     picture = data.get("picture")
     session_token = data.get("session_token")
+
+    if not email or not session_token:
+        raise HTTPException(status_code=401, detail="Invalid session")
     
     # Check if user exists
-    user = await db.users.find_one({"email": email}, {"_id": 0})
+    user = await find_user_by_email(email, {"_id": 0})
     
+    created_oauth_user = False
     if user:
         user_id = user["user_id"]
         # Update user data
         await db.users.update_one(
-            {"email": email},
-            {"$set": {"name": name, "picture": picture}}
+            {"user_id": user_id},
+            {"$set": {"email": email, "email_normalized": email, "name": name, "picture": picture}}
         )
     else:
         # Create new user
@@ -1367,31 +1505,61 @@ async def exchange_session(request: Request):
         user_doc = {
             "user_id": user_id,
             "email": email,
+            "email_normalized": email,
             "name": name,
-            "role": "customer",
+            "role": new_user_role,
             "picture": picture,
             "password": None,  # OAuth users don't have password
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "vendor_profile": None
+            "vendor_profile": None,
+            "vendor_status": "pending_onboarding" if new_user_role == "vendor" else None,
+            "vendor_email_verified": True if new_user_role == "vendor" else None,
+            "vendor_email_verified_at": datetime.now(timezone.utc).isoformat() if new_user_role == "vendor" else None
         }
-        await db.users.insert_one(user_doc)
-        await send_resend_email(
-            email,
-            "Welcome to Black Star Threads",
-            f"""
-            <div>
-              <h2>Welcome to Black Star Threads</h2>
-              <p>Hi {name},</p>
-              <p>Your customer account has been created successfully.</p>
-              <p>You can now browse jerseys, save favorites, and place orders from the marketplace.</p>
-            </div>
-            """,
-            text=(
-                f"Hi {name}, welcome to Black Star Threads. "
-                "Your customer account has been created successfully."
-            ),
-        )
+        try:
+            await db.users.insert_one(user_doc)
+            created_oauth_user = True
+        except DuplicateKeyError:
+            user = await find_user_by_email(email, {"_id": 0})
+            if not user:
+                raise HTTPException(status_code=400, detail="Email already registered")
+            user_id = user["user_id"]
+    if created_oauth_user:
+        if new_user_role == "vendor":
+            await send_resend_email(
+                email,
+                "Welcome to the GhanaJersey.co vendor portal",
+                f"""
+                <div>
+                  <h2>Welcome to GhanaJersey.co</h2>
+                  <p>Hi {name},</p>
+                  <p>Your vendor account has been created with your social sign-in.</p>
+                  <p>You can now continue to vendor onboarding and submit jerseys for approval.</p>
+                </div>
+                """,
+                text=(
+                    f"Hi {name}, your GhanaJersey.co vendor account has been created. "
+                    "You can now continue to vendor onboarding."
+                ),
+            )
+        else:
+            await send_resend_email(
+                email,
+                "Welcome to Black Star Threads",
+                f"""
+                <div>
+                  <h2>Welcome to Black Star Threads</h2>
+                  <p>Hi {name},</p>
+                  <p>Your customer account has been created successfully.</p>
+                  <p>You can now browse jerseys, save favorites, and place orders from the marketplace.</p>
+                </div>
+                """,
+                text=(
+                    f"Hi {name}, welcome to Black Star Threads. "
+                    "Your customer account has been created successfully."
+                ),
+            )
     
     # Store session
     session_doc = {
@@ -4155,12 +4323,14 @@ async def startup_event():
 
         # Create default admin user if not exists
         admin_email = "easante@nitlimited.com"
-        admin = await db.users.find_one({"email": admin_email})
+        admin_email_normalized = normalize_email_address(admin_email)
+        admin = await find_user_by_email(admin_email_normalized)
 
         if not admin:
             admin_doc = {
                 "user_id": f"user_{uuid.uuid4().hex[:12]}",
-                "email": admin_email,
+                "email": admin_email_normalized,
+                "email_normalized": admin_email_normalized,
                 "password": hash_password("admin123"),
                 "name": "Admin",
                 "role": "admin",
@@ -4172,9 +4342,30 @@ async def startup_event():
             await db.users.insert_one(admin_doc)
             logger.info("Default admin user created")
 
+        async for existing_user in db.users.find(
+            {"email": {"$exists": True}},
+            {"_id": 0, "user_id": 1, "email": 1, "email_normalized": 1}
+        ):
+            normalized_email = normalize_email_address(existing_user.get("email"))
+            if normalized_email and existing_user.get("email_normalized") != normalized_email:
+                await db.users.update_one(
+                    {"user_id": existing_user["user_id"]},
+                    {"$set": {"email_normalized": normalized_email}}
+                )
+
         # Create indexes
-        await db.users.create_index("email", unique=True)
+        try:
+            await db.users.create_index("email", unique=True)
+        except Exception as exc:
+            logger.warning("Could not create unique email index; check existing duplicate emails: %s", exc)
+        try:
+            await db.users.create_index("email_normalized", unique=True, sparse=True)
+        except Exception as exc:
+            logger.warning("Could not create unique normalized email index; check existing duplicate emails: %s", exc)
         await db.users.create_index("user_id", unique=True)
+        await db.password_resets.create_index("token_hash", unique=True)
+        await db.password_resets.create_index("expires_at")
+        await db.password_resets.create_index("user_id")
         await db.products.create_index("product_id", unique=True)
         await db.products.create_index("slug", unique=True)
         await db.products.create_index("vendor_id")

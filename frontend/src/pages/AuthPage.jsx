@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation, Link, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Mail, Lock, User, Eye, EyeOff, KeyRound } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -12,10 +12,12 @@ import { toast } from "sonner";
 const AuthPage = ({ mode = "vendor" }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { login, register, loginWithGoogle, logout, verifyVendorLogin2FA } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -23,6 +25,13 @@ const AuthPage = ({ mode = "vendor" }) => {
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
+  const resetTokenFromUrl = searchParams.get("reset_token") || "";
+  const [showPasswordRecovery, setShowPasswordRecovery] = useState(Boolean(resetTokenFromUrl));
+  const [resetToken, setResetToken] = useState(resetTokenFromUrl);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   const from = location.state?.from?.pathname || "/";
   const isAdminMode = mode === "admin";
@@ -153,6 +162,74 @@ const AuthPage = ({ mode = "vendor" }) => {
     ? "Use your administrator credentials to access the control room."
     : "Sign in to manage onboarding, products, approvals, and vendor orders.";
 
+  useEffect(() => {
+    if (resetTokenFromUrl) {
+      setResetToken(resetTokenFromUrl);
+      setShowPasswordRecovery(true);
+    }
+  }, [resetTokenFromUrl]);
+
+  const openPasswordRecovery = () => {
+    setResetEmail(loginEmail || registerEmail || "");
+    setShowPasswordRecovery(true);
+  };
+
+  const closePasswordRecovery = () => {
+    setShowPasswordRecovery(false);
+    setResetToken("");
+    setResetPassword("");
+    setResetPasswordConfirm("");
+    setSearchParams({});
+  };
+
+  const handleRequestPasswordReset = async (e) => {
+    e.preventDefault();
+    if (!resetEmail) {
+      toast.error("Enter your account email");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await axios.post(`${API}/auth/password-reset/request`, { email: resetEmail });
+      toast.success("If that email exists, a password reset link has been sent.");
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Password reset request failed");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleConfirmPasswordReset = async (e) => {
+    e.preventDefault();
+    if (!resetPassword || !resetPasswordConfirm) {
+      toast.error("Please fill in both password fields");
+      return;
+    }
+    if (resetPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (resetPassword !== resetPasswordConfirm) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await axios.post(`${API}/auth/password-reset/confirm`, {
+        token: resetToken,
+        password: resetPassword
+      });
+      toast.success("Password reset successfully. You can sign in now.");
+      closePasswordRecovery();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Password reset failed");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-bone-white flex" data-testid="auth-page">
       <div className="hidden lg:block lg:w-1/2 relative">
@@ -189,6 +266,104 @@ const AuthPage = ({ mode = "vendor" }) => {
             </Link>
           </div>
 
+          {showPasswordRecovery ? (
+            <div className="w-full">
+              <button
+                type="button"
+                onClick={closePasswordRecovery}
+                className="inline-flex items-center gap-2 font-body text-xs uppercase tracking-wider text-muted-text hover:text-black mb-8"
+              >
+                <ArrowLeft size={16} />
+                Back to Sign In
+              </button>
+
+              <div className="mb-6">
+                <div className="w-12 h-12 border border-black/10 bg-white flex items-center justify-center mb-5">
+                  <KeyRound size={20} className="text-black" />
+                </div>
+                <h1 className="font-heading text-2xl tracking-widest uppercase">Password Recovery</h1>
+                <p className="font-body text-sm text-muted-text mt-2">
+                  {resetToken ? "Create a new password for your account." : "Enter your account email and we will send a secure reset link."}
+                </p>
+              </div>
+
+              {resetToken ? (
+                <form onSubmit={handleConfirmPasswordReset} className="space-y-6">
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">New Password</Label>
+                    <div className="relative mt-2">
+                      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
+                      <Input
+                        type={showResetPassword ? "text" : "password"}
+                        value={resetPassword}
+                        onChange={(e) => setResetPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="pl-12 pr-12 rounded-none border-black/20 focus:border-black py-6"
+                        data-testid="reset-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowResetPassword(!showResetPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-text"
+                      >
+                        {showResetPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Confirm Password</Label>
+                    <div className="relative mt-2">
+                      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
+                      <Input
+                        type={showResetPassword ? "text" : "password"}
+                        value={resetPasswordConfirm}
+                        onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                        placeholder="••••••••"
+                        className="pl-12 rounded-none border-black/20 focus:border-black py-6"
+                        data-testid="reset-password-confirm"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
+                    data-testid="reset-password-submit"
+                  >
+                    {resetLoading ? "Saving..." : "Save New Password"}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleRequestPasswordReset} className="space-y-6">
+                  <div>
+                    <Label className="font-body text-sm uppercase tracking-wider">Email</Label>
+                    <div className="relative mt-2">
+                      <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
+                      <Input
+                        type="email"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className="pl-12 rounded-none border-black/20 focus:border-black py-6"
+                        data-testid="reset-email"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="w-full bg-black text-white hover:bg-ashanti-gold hover:text-black py-6 font-body uppercase tracking-widest"
+                    data-testid="reset-request-submit"
+                  >
+                    {resetLoading ? "Sending..." : "Send Reset Link"}
+                  </Button>
+                </form>
+              )}
+            </div>
+          ) : (
           <Tabs defaultValue="login" className="w-full">
             <TabsList className={`grid w-full ${allowRegistration ? "grid-cols-2" : "grid-cols-1"} bg-transparent border-b border-black/10 rounded-none h-auto p-0`}>
               <TabsTrigger
@@ -275,7 +450,16 @@ const AuthPage = ({ mode = "vendor" }) => {
                   </div>
 
                   <div>
-                    <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
+                    <div className="flex items-center justify-between gap-4">
+                      <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
+                      <button
+                        type="button"
+                        onClick={openPasswordRecovery}
+                        className="font-body text-xs uppercase tracking-wide text-muted-text hover:text-black"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
                     <div className="relative mt-2">
                       <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
                       <Input
@@ -323,14 +507,14 @@ const AuthPage = ({ mode = "vendor" }) => {
                       <div className="w-full border-t border-black/10"></div>
                     </div>
                     <div className="relative flex justify-center">
-                      <span className="bg-bone-white px-4 font-body text-sm text-muted-text">or continue with</span>
+                      <span className="bg-bone-white px-4 font-body text-sm text-muted-text">or sign in with social media</span>
                     </div>
                   </div>
 
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={loginWithGoogle}
+                    onClick={() => loginWithGoogle("vendor")}
                     className="w-full border-black py-6 font-body uppercase tracking-widest"
                     data-testid="google-login"
                   >
@@ -387,7 +571,16 @@ const AuthPage = ({ mode = "vendor" }) => {
                   </div>
 
                   <div>
-                    <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
+                    <div className="flex items-center justify-between gap-4">
+                      <Label className="font-body text-sm uppercase tracking-wider">Password</Label>
+                      <button
+                        type="button"
+                        onClick={openPasswordRecovery}
+                        className="font-body text-xs uppercase tracking-wide text-muted-text hover:text-black"
+                      >
+                        Recover password
+                      </button>
+                    </div>
                     <div className="relative mt-2">
                       <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-text" />
                       <Input
@@ -431,14 +624,14 @@ const AuthPage = ({ mode = "vendor" }) => {
                     <div className="w-full border-t border-black/10"></div>
                   </div>
                   <div className="relative flex justify-center">
-                    <span className="bg-bone-white px-4 font-body text-sm text-muted-text">or continue with</span>
+                    <span className="bg-bone-white px-4 font-body text-sm text-muted-text">or register with social media</span>
                   </div>
                 </div>
 
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={loginWithGoogle}
+                  onClick={() => loginWithGoogle("vendor")}
                   className="w-full border-black py-6 font-body uppercase tracking-widest"
                   data-testid="google-register"
                 >
@@ -448,11 +641,12 @@ const AuthPage = ({ mode = "vendor" }) => {
                     <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                     <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                   </svg>
-                  Sign up with Google
+                  Register with Google
                 </Button>
               </TabsContent>
             )}
           </Tabs>
+          )}
 
           <p className="text-center mt-8 font-body text-sm text-muted-text">
             By signing in, you agree to our Terms of Service and Privacy Policy.
