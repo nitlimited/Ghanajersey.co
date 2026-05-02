@@ -1840,7 +1840,15 @@ async def delete_uploaded_file(
         {"_id": 0}
     )
     if not file_record:
-        raise HTTPException(status_code=404, detail="Uploaded image not found")
+        logger.info(
+            "Upload metadata not found for %s owned by %s; treating delete as reference-only removal",
+            storage_path,
+            user["user_id"],
+        )
+        return {
+            "message": "Image reference removed",
+            "deleted_from_storage": False
+        }
 
     delete_object(storage_path)
     await db.uploaded_files.update_one(
@@ -1851,7 +1859,10 @@ async def delete_uploaded_file(
         }}
     )
 
-    return {"message": "Image removed successfully"}
+    return {
+        "message": "Image removed successfully",
+        "deleted_from_storage": True
+    }
 
 # Serve uploaded files
 @api_router.get("/files/{path:path}")
