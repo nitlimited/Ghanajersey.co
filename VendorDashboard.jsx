@@ -589,8 +589,8 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Product Images (Saved to R2)</Label>
-                  <p className="font-body text-xs text-muted-text mb-2">Upload front image first, then back for hover effect. Product images are stored in your R2 bucket.</p>
+                  <Label className="font-body text-sm uppercase tracking-wider">Product Images</Label>
+                  <p className="font-body text-xs text-muted-text mb-2">Upload front image first, then back for hover effect.</p>
                   {productForm.images.map((img, index) => (
                     <div key={index} className="mt-2 space-y-2 border border-black/10 p-3">
                       <div className="flex items-center gap-3">

@@ -736,7 +736,7 @@ const VendorDashboard = () => {
                 </div>
 
                 <div>
-                  <Label className="font-body text-sm uppercase tracking-wider">Product Images (Saved to R2)</Label>
+                  <Label className="font-body text-sm uppercase tracking-wider">Product Images</Label>
                   <div className="mt-3 mb-4 border border-ashanti-gold/30 bg-ashanti-gold/5 p-4">
                     <p className="font-body text-xs uppercase tracking-[0.2em] text-ashanti-gold mb-2">Product Image Rules</p>
                     <p className="font-body text-sm text-muted-text">The first 2 product images are required and must show the jersey on a clean white background for storefront consistency.</p>
