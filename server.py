@@ -47,6 +47,7 @@ APP_NAME = "blackstar-threads"
 S3_BUCKET = os.environ.get('S3_BUCKET')
 S3_REGION = os.environ.get('S3_REGION')
 S3_ENDPOINT_URL = os.environ.get('S3_ENDPOINT_URL')
+R2_PUBLIC_URL = os.environ.get('R2_PUBLIC_URL', '').rstrip('/')
 s3_client = None
 
 # Paystack Config
@@ -113,12 +114,16 @@ async def notify_admin(subject: str, html: str, text: Optional[str] = None) -> b
     return await send_resend_email(ADMIN_EMAIL, subject, html, text=text)
 
 def build_file_url(path: str) -> str:
+    if R2_PUBLIC_URL and path:
+        return f"{R2_PUBLIC_URL}/{path}"
     return f"/api/files/{path}"
 
 def normalize_image_url(image: str) -> str:
     if not image:
         return image
     if image.startswith("/api/files/"):
+        return image
+    if R2_PUBLIC_URL and image.startswith(R2_PUBLIC_URL):
         return image
     if image.startswith(f"{APP_NAME}/"):
         return build_file_url(image)
