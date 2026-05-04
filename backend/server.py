@@ -300,10 +300,12 @@ def extract_storage_path(value: Optional[str]) -> Optional[str]:
 def normalize_image_url(image: str) -> str:
     if not image:
         return image
-    if image.startswith("/api/files/"):
-        return image
-    if R2_PUBLIC_URL and image.startswith(R2_PUBLIC_URL):
-        return image
+    if R2_PUBLIC_URL:
+        if image.startswith("/api/files/"):
+            storage_path = image[len("/api/files/"):]
+            return f"{R2_PUBLIC_URL}/{storage_path}"
+        if image.startswith(R2_PUBLIC_URL):
+            return image
     if image.startswith(f"{APP_NAME}/"):
         return build_file_url(image)
     marker = f"/{APP_NAME}/"
