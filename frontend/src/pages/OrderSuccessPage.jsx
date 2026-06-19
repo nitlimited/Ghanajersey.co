@@ -3,12 +3,13 @@ import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle, Package, ArrowRight } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Header, Footer } from "./LandingPage";
-import { useAuth, API } from "../App";
+import { useAuth, useCart, API } from "../App";
 import axios from "axios";
 
 const OrderSuccessPage = () => {
   const [searchParams] = useSearchParams();
   const { token } = useAuth();
+  const { clearCart } = useCart();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [paymentVerified, setPaymentVerified] = useState(false);
@@ -27,6 +28,8 @@ const OrderSuccessPage = () => {
           });
           if (response.data.payment_status === "paid") {
             setPaymentVerified(true);
+            // Sync local cart state — server already cleared on confirmation.
+            await clearCart();
           }
         }
         // Verify Paystack payment
@@ -36,11 +39,13 @@ const OrderSuccessPage = () => {
           });
           if (response.data.status === "success") {
             setPaymentVerified(true);
+            await clearCart();
           }
         }
-        // PayPal or direct order
+        // Direct order success (rare; payment happened elsewhere)
         else if (orderId) {
           setPaymentVerified(true);
+          await clearCart();
         }
       } catch (error) {
         console.error("Payment verification error:", error);
@@ -65,7 +70,7 @@ const OrderSuccessPage = () => {
 
     verifyPayment();
     fetchOrder();
-  }, [sessionId, reference, orderId, token]);
+  }, [sessionId, reference, orderId, token, clearCart]);
 
   if (loading) {
     return (

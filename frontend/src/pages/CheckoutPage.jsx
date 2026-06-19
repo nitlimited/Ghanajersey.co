@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { CreditCard, Truck, Shield } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { CreditCard, Truck, Shield, Tag, Check, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -14,11 +14,22 @@ import axios from "axios";
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, token, register, login } = useAuth();
   const { cart, clearCart, syncGuestCartToServer } = useCart();
-  const { isGhana, formatPrice, getCurrencyCode } = useLocalization();
+  const { isGhana, countryDetected, formatPrice, getCurrencyCode } = useLocalization();
   const [loading, setLoading] = useState(false);
+  // Track whether the user has touched the payment selector so we don't
+  // override their choice if the country detection lands later.
   const [paymentMethod, setPaymentMethod] = useState(isGhana ? "paystack" : "stripe");
+  const [paymentMethodTouched, setPaymentMethodTouched] = useState(false);
+
+  // Promo / coupon code state
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState(null); // {code, discount_percent}
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState("");
+
   const [customerAccount, setCustomerAccount] = useState({
     email: user?.email || "",
     password: ""
@@ -51,13 +62,20 @@ const CheckoutPage = () => {
     ? (shippingAddress.country === "Ghana" ? 50 : 250)  // GHS rates
     : (shippingAddress.country === "Ghana" ? 5 : qualifiesForInternationalFreeShipping ? 0 : 15);   // USD rates
   
-  const total = subtotal + shippingCost;
+  // Promo discount applies to the items subtotal only (not shipping). Mirrors
+  // the server-side calculation so the user sees an accurate preview.
+  const discountAmount = appliedPromo
+    ? Math.round(subtotal * (appliedPromo.discount_percent || 0)) / 100
+    : 0;
+  const total = Math.max(0, subtotal - discountAmount + shippingCost);
   const currency = getCurrencyCode();
   const formatLocalizedAmount = (amount) => formatPrice(amount, isGhana ? amount : null);
-  const paymentBrands = [
-    "Amazon Pay", "American Express", "Apple Pay", "Discover", "Mastercard", "Visa",
-    "MTN MoMo", "AirtelTigo Money", "VodaCash"
-  ];
+
+  // Brands the Stripe card actually accepts. Shown as a strip under the option.
+  const stripeBrands = ["Visa", "Mastercard", "Amex", "Discover", "Apple Pay", "Google Pay"];
+  // Mobile money operators Paystack supports in Ghana.
+  const paystackBrands = ["MTN MoMo", "AirtelTigo Money", "VodaCash", "Visa", "Mastercard"];
+
   const shippingWindows = [
     { country: "United States", timeline: "3-5 Days" },
     { country: "Canada & Mexico", timeline: "7-14 Days" },
@@ -68,6 +86,65 @@ const CheckoutPage = () => {
     "Ghana", "United States", "United Kingdom", "Germany", "France", 
     "Nigeria", "South Africa", "Kenya", "Canada", "Australia"
   ];
+
+  // Smart payment default: once country detection lands, swap to the
+  // recommended option — unless the user has already picked something.
+  useEffect(() => {
+    if (!countryDetected || paymentMethodTouched) return;
+    const recommended = isGhana ? "paystack" : "stripe";
+    setPaymentMethod((current) => (current === recommended ? current : recommended));
+  }, [countryDetected, isGhana, paymentMethodTouched]);
+
+  // If the user arrived back from a cancelled payment, the Stripe cancel_url
+  // sends them to /checkout?order_id=... Show a friendly nudge that nothing
+  // was lost.
+  useEffect(() => {
+    if (searchParams.get("order_id") || searchParams.get("payment") === "cancelled") {
+      toast.info("Payment was not completed. Your cart is saved — try again when you're ready.", {
+        duration: 6000,
+      });
+    }
+    // run once on mount; searchParams is stable enough for this purpose
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePaymentMethodChange = (value) => {
+    setPaymentMethodTouched(true);
+    setPaymentMethod(value);
+  };
+
+  const handleApplyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code) {
+      setPromoError("Enter a code to apply.");
+      return;
+    }
+    setPromoLoading(true);
+    setPromoError("");
+    try {
+      const response = await axios.post(
+        `${API}/discounts/validate?code=${encodeURIComponent(code)}`
+      );
+      setAppliedPromo({
+        code: response.data.code || code.toUpperCase(),
+        discount_percent: response.data.discount_percent,
+      });
+      toast.success(`Code applied: ${response.data.discount_percent}% off`);
+    } catch (error) {
+      setAppliedPromo(null);
+      const message = error.response?.data?.detail || "Could not apply this code.";
+      setPromoError(message);
+      toast.error(message);
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoInput("");
+    setPromoError("");
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -169,7 +246,8 @@ const CheckoutPage = () => {
         currency: currency,
         subtotal: subtotal,
         shipping_cost: shippingCost,
-        total: total
+        total: total,
+        promo_code: appliedPromo?.code || null,
       }, {
         headers: { Authorization: `Bearer ${activeToken}` }
       });
@@ -189,23 +267,6 @@ const CheckoutPage = () => {
 
         // Redirect to Stripe
         window.location.href = paymentResponse.data.url;
-      } else if (paymentMethod === "paypal") {
-        const paymentResponse = await axios.post(`${API}/payments/paypal/create`, {
-          order_id,
-          origin_url: originUrl
-        }, {
-          headers: { Authorization: `Bearer ${activeToken}` }
-        });
-
-        // For demo, simulate PayPal success
-        const captureResponse = await axios.post(`${API}/payments/paypal/capture/${paymentResponse.data.order_id}`, {}, {
-          headers: { Authorization: `Bearer ${activeToken}` }
-        });
-
-        if (captureResponse.data.status === "COMPLETED") {
-          await clearCart();
-          navigate(`/order-success?order_id=${order_id}`);
-        }
       } else if (paymentMethod === "paystack") {
         // Paystack for Ghana customers (GHS) or other African countries
         const paymentResponse = await axios.post(`${API}/payments/paystack/initialize`, {
@@ -222,6 +283,8 @@ const CheckoutPage = () => {
         } else {
           throw new Error("Failed to initialize Paystack payment");
         }
+      } else {
+        throw new Error("Please select a payment method.");
       }
     } catch (error) {
       console.error("Checkout error:", error);
@@ -376,53 +439,104 @@ const CheckoutPage = () => {
 
               {/* Payment Method */}
               <div className="bg-white p-8 border border-black/10">
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-2">
                   <CreditCard size={24} />
                   <h2 className="font-heading text-lg tracking-widest uppercase">Payment Method</h2>
                 </div>
+                <p className="font-body text-sm text-muted-text mb-6">
+                  {countryDetected
+                    ? (isGhana
+                        ? "We've selected Paystack for you — it's the easiest way to pay from Ghana."
+                        : "We've selected Stripe for you — it accepts all major international cards.")
+                    : "Pick the option that works best for you."}
+                </p>
 
-                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-4">
-                  {/* Paystack - Highlighted for Ghana users */}
-                  <div className={`flex items-center space-x-3 p-4 border cursor-pointer transition-colors ${
-                    isGhana ? 'border-ghana-green bg-ghana-green/5' : 'border-black/10 hover:border-black'
-                  } ${paymentMethod === 'paystack' ? 'border-black bg-black/5' : ''}`}>
-                    <RadioGroupItem value="paystack" id="paystack" data-testid="payment-paystack" />
-                    <Label htmlFor="paystack" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-2">
-                        <span className="font-body font-medium">Paystack</span>
-                        {isGhana && <span className="bg-ghana-green text-white text-[10px] px-2 py-0.5 font-body uppercase">Recommended</span>}
+                <RadioGroup value={paymentMethod} onValueChange={handlePaymentMethodChange} className="space-y-4">
+                  {/* Paystack — recommended for Ghana */}
+                  <label
+                    htmlFor="paystack"
+                    className={`block p-5 border cursor-pointer transition-colors ${
+                      paymentMethod === "paystack"
+                        ? "border-black bg-black/5"
+                        : isGhana
+                          ? "border-ghana-green bg-ghana-green/5 hover:border-black"
+                          : "border-black/10 hover:border-black"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <RadioGroupItem value="paystack" id="paystack" data-testid="payment-paystack" className="mt-1" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-body font-medium">Paystack</span>
+                          {isGhana && (
+                            <span className="bg-ghana-green text-white text-[10px] px-2 py-0.5 font-body uppercase tracking-wider">
+                              Recommended
+                            </span>
+                          )}
+                          <span className="ml-auto bg-[#00C3F7] text-white px-3 py-1 text-xs font-body font-semibold rounded">
+                            Paystack
+                          </span>
+                        </div>
+                        <p className="font-body text-sm text-muted-text mt-2">
+                          <strong className="text-black">Recommended for buyers in Ghana</strong> paying with Mobile Money locally — MTN MoMo, AirtelTigo Money, VodaCash, or any local bank card in Ghana Cedis (GHS).
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {paystackBrands.map((brand) => (
+                            <span
+                              key={brand}
+                              className="border border-black/10 bg-bone-white px-2 py-1 text-[10px] font-body uppercase tracking-[0.14em]"
+                            >
+                              {brand}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <span className="font-body text-sm text-muted-text block">Mobile Money, Bank Card, USSD {isGhana ? '(GHS)' : '(Africa)'}</span>
-                    </Label>
-                    <div className="bg-[#00C3F7] text-white px-3 py-1 text-xs font-body font-semibold rounded">Paystack</div>
-                  </div>
+                    </div>
+                  </label>
 
-                  {/* Stripe - For international cards */}
-                  <div className={`flex items-center space-x-3 p-4 border cursor-pointer transition-colors ${
-                    !isGhana ? 'border-blue-500 bg-blue-500/5' : 'border-black/10 hover:border-black'
-                  } ${paymentMethod === 'stripe' ? 'border-black bg-black/5' : ''}`}>
-                    <RadioGroupItem value="stripe" id="stripe" data-testid="payment-stripe" />
-                    <Label htmlFor="stripe" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-2">
-                        <span className="font-body font-medium">Credit/Debit Card</span>
-                        {!isGhana && <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 font-body uppercase">Recommended</span>}
+                  {/* Stripe — recommended for international */}
+                  <label
+                    htmlFor="stripe"
+                    className={`block p-5 border cursor-pointer transition-colors ${
+                      paymentMethod === "stripe"
+                        ? "border-black bg-black/5"
+                        : !isGhana
+                          ? "border-blue-500 bg-blue-500/5 hover:border-black"
+                          : "border-black/10 hover:border-black"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <RadioGroupItem value="stripe" id="stripe" data-testid="payment-stripe" className="mt-1" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-body font-medium">Stripe — Credit / Debit Card</span>
+                          {!isGhana && (
+                            <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 font-body uppercase tracking-wider">
+                              Recommended
+                            </span>
+                          )}
+                          <img
+                            src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/200px-Stripe_Logo%2C_revised_2016.svg.png"
+                            alt="Stripe"
+                            className="h-5 ml-auto"
+                          />
+                        </div>
+                        <p className="font-body text-sm text-muted-text mt-2">
+                          <strong className="text-black">Highly recommended for international buyers.</strong> Pay in USD with Visa, Mastercard, American Express, Discover, Apple Pay, Google Pay, and most other major cards Stripe supports.
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {stripeBrands.map((brand) => (
+                            <span
+                              key={brand}
+                              className="border border-black/10 bg-bone-white px-2 py-1 text-[10px] font-body uppercase tracking-[0.14em]"
+                            >
+                              {brand}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <span className="font-body text-sm text-muted-text block">Visa, Mastercard, Amex via Stripe (USD)</span>
-                    </Label>
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Stripe_Logo%2C_revised_2016.svg/200px-Stripe_Logo%2C_revised_2016.svg.png" alt="Stripe" className="h-6" />
-                  </div>
-
-                  {/* PayPal */}
-                  <div className={`flex items-center space-x-3 p-4 border border-black/10 cursor-pointer hover:border-black transition-colors ${
-                    paymentMethod === 'paypal' ? 'border-black bg-black/5' : ''
-                  }`}>
-                    <RadioGroupItem value="paypal" id="paypal" data-testid="payment-paypal" />
-                    <Label htmlFor="paypal" className="flex-1 cursor-pointer">
-                      <span className="font-body font-medium">PayPal</span>
-                      <span className="font-body text-sm text-muted-text block">Pay with your PayPal account (USD)</span>
-                    </Label>
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/PayPal.svg/200px-PayPal.svg.png" alt="PayPal" className="h-6" />
-                  </div>
+                    </div>
+                  </label>
                 </RadioGroup>
 
                 {/* Currency info based on location */}
@@ -434,17 +548,6 @@ const CheckoutPage = () => {
                       <>🌍 You're shopping internationally. Prices are shown in <strong>USD (US Dollar)</strong>.</>
                     )}
                   </p>
-                </div>
-
-                <div className="mt-6">
-                  <h3 className="font-heading text-sm tracking-widest uppercase mb-3">Accepted Payments</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {paymentBrands.map((brand) => (
-                      <div key={brand} className="border border-black/10 px-3 py-3 text-center bg-bone-white">
-                        <span className="font-body text-xs uppercase tracking-[0.18em]">{brand}</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
 
@@ -509,6 +612,71 @@ const CheckoutPage = () => {
                       <span>Orders over $200</span>
                     </div>
                   )}
+                  {appliedPromo && (
+                    <div className="flex justify-between font-body text-sm text-ghana-green">
+                      <span>Discount ({appliedPromo.code} · {appliedPromo.discount_percent}% off)</span>
+                      <span>− {formatLocalizedAmount(discountAmount)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Promo / coupon code */}
+                <div className="border-t border-black/10 pt-4 mt-4">
+                  <Label className="font-body text-xs uppercase tracking-widest text-muted-text flex items-center gap-2">
+                    <Tag size={14} /> Promo / Coupon Code
+                  </Label>
+                  {appliedPromo ? (
+                    <div className="mt-2 flex items-center justify-between border border-ghana-green/40 bg-ghana-green/5 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Check size={16} className="text-ghana-green" />
+                        <span className="font-body text-sm">
+                          <strong>{appliedPromo.code}</strong> — {appliedPromo.discount_percent}% off
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemovePromo}
+                        className="font-body text-xs uppercase tracking-wider text-muted-text hover:text-black underline"
+                        data-testid="remove-promo"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          value={promoInput}
+                          onChange={(e) => {
+                            setPromoInput(e.target.value);
+                            if (promoError) setPromoError("");
+                          }}
+                          placeholder="Enter code"
+                          className="rounded-none border-black/20 focus:border-black uppercase"
+                          data-testid="input-promo"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleApplyPromo();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          onClick={handleApplyPromo}
+                          disabled={promoLoading || !promoInput.trim()}
+                          variant="outline"
+                          className="border-black rounded-none font-body uppercase tracking-widest px-4"
+                          data-testid="apply-promo"
+                        >
+                          {promoLoading ? <Loader2 size={14} className="animate-spin" /> : "Apply"}
+                        </Button>
+                      </div>
+                      {promoError && (
+                        <p className="font-body text-xs text-ghana-red mt-2">{promoError}</p>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 <div className="border-t border-black/10 pt-4 mt-4 mb-6">
@@ -529,7 +697,7 @@ const CheckoutPage = () => {
 
                 <div className="flex items-center justify-center gap-2 mt-4 text-muted-text">
                   <Shield size={16} />
-                  <span className="font-body text-xs">Secure checkout • {paymentMethod === 'paystack' ? 'Paystack' : paymentMethod === 'stripe' ? 'Stripe' : 'PayPal'} protected</span>
+                  <span className="font-body text-xs">Secure checkout • {paymentMethod === 'paystack' ? 'Paystack' : 'Stripe'} protected</span>
                 </div>
               </div>
             </div>

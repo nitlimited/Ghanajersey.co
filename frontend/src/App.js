@@ -248,6 +248,14 @@ const CartProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCart(response.data);
+      // Mirror the authenticated cart to localStorage as a defensive backup
+      // so a transient session blip mid-checkout doesn't lose the user's items.
+      try {
+        const mirrorItems = Array.isArray(response.data?.items) ? response.data.items : [];
+        localStorage.setItem(GUEST_CART_KEY, JSON.stringify(mirrorItems));
+      } catch (_) {
+        // Storage may be unavailable (private browsing, quota); not fatal.
+      }
     } catch (error) {
       console.error("Failed to fetch cart:", error);
     } finally {
