@@ -63,8 +63,8 @@ Suggested settings:
 | `JWT_SECRET_KEY` | Yes | Secret used to sign auth tokens |
 | `CORS_ORIGINS` | Yes | Public app URL, for example `https://ghanajersey.co` |
 | `FRONTEND_URL` | Recommended | Usually the same public app URL |
-| `STRIPE_API_KEY` | Optional | Needed for Stripe checkout |
-| `STRIPE_WEBHOOK_SECRET` | Recommended | Needed to verify Stripe webhook signatures |
+| `STRIPE_API_KEY` | Optional | Stripe **secret** key (`sk_live_...` or `sk_test_...`). Needed for Stripe Checkout. See [Stripe Payments](#stripe-payments) |
+| `STRIPE_WEBHOOK_SECRET` | Recommended | Signing secret (`whsec_...`) for the `/api/webhook/stripe` endpoint. Without it, webhook events are accepted **unverified**. See [Stripe Payments](#stripe-payments) |
 | `PAYSTACK_SECRET_KEY` | Optional | Needed for Paystack payments |
 | `PAYSTACK_PUBLIC_KEY` | Optional | Needed for Paystack frontend flow |
 | `RESEND_API_KEY` | Optional | Needed when Resend is used for transactional emails |
@@ -139,6 +139,62 @@ For SEO tags and canonical URLs, set:
 REACT_APP_SITE_URL=https://ghanajersey.co
 ```
 
+## Stripe Payments
+
+Stripe is integrated end-to-end using Stripe **Checkout** (Stripe-hosted payment page). On checkout the backend creates a Checkout Session, the customer is redirected to Stripe to pay, and the order is marked paid either when the customer returns to the success page or when Stripe calls the webhook — whichever happens first.
+
+No publishable key is needed in the frontend because the customer is redirected to the Stripe-hosted page. Only the **secret** key and (recommended) the **webhook signing secret** are configured on the backend.
+
+### Relevant endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/payments/stripe/checkout` | Creates a Checkout Session for an order and returns the redirect URL |
+| `GET /api/payments/stripe/status/{session_id}` | Polled by the success page to confirm the payment |
+| `POST /api/webhook/stripe` | Receives Stripe events (`checkout.session.completed`) and marks the order paid |
+
+> Stripe charges are processed in **USD** in the storefront. Ghana-cedi (GHS) payments go through Paystack, not Stripe.
+
+### 1. Get your Stripe keys
+
+1. In the [Stripe Dashboard](https://dashboard.stripe.com/apikeys), copy your **Secret key**.
+   - Use a test key (`sk_test_...`) for staging and the live key (`sk_live_...`) for production.
+2. Set it on the Coolify application:
+
+   ```env
+   STRIPE_API_KEY=sk_live_<your_secret_key>
+   ```
+
+If `STRIPE_API_KEY` is unset, it falls back to a non-functional placeholder and live Stripe checkout will fail — set a real key before going live.
+
+### 2. Configure the webhook (Coolify)
+
+The backend exposes the webhook on the same public domain as the rest of the API:
+
+```text
+https://ghanajersey.co/api/webhook/stripe
+```
+
+In the [Stripe Dashboard → Developers → Webhooks](https://dashboard.stripe.com/webhooks):
+
+1. **Add endpoint** and paste the URL above (use your real domain).
+2. Select the event **`checkout.session.completed`** (the only event the backend acts on).
+3. After creating the endpoint, copy its **Signing secret** (`whsec_...`).
+4. Set it on the Coolify application and redeploy:
+
+   ```env
+   STRIPE_WEBHOOK_SECRET=whsec_<your_webhook_signing_secret>
+   ```
+
+When `STRIPE_WEBHOOK_SECRET` is set, the backend verifies the Stripe signature on every webhook call. If it is left unset, webhook payloads are parsed **without verification**, which is insecure — always set it in production.
+
+### 3. Verify
+
+- Place a test order and confirm you are redirected to the Stripe-hosted payment page.
+- After paying, confirm the order moves to `paid` / `processing` and that paid-order notification emails are sent.
+- In the Stripe Dashboard webhook view, confirm the `checkout.session.completed` delivery returns `200`.
+- `GET /api/health/deep` reports whether Stripe is configured (`stripe: configured` when `STRIPE_API_KEY` is set, otherwise `missing`).
+
 ## Local Development
 
 ### Backend
@@ -153,6 +209,8 @@ export DB_NAME="ghanajersey"
 export RESEND_API_KEY="re_xxxxxxxxxxxxxxxxx"
 export RESEND_FROM_EMAIL="Black Star Threads <no-reply@ghanajersey.co>"
 export ADMIN_EMAIL="admin@ghanajersey.co"
+export STRIPE_API_KEY="sk_test_<your_secret_key>"
+export STRIPE_WEBHOOK_SECRET="whsec_<your_webhook_signing_secret>"
 export REACT_APP_ADMIN_PORTAL_PATH="/control-room"
 export REACT_APP_SITE_URL="https://ghanajersey.co"
 export R2_PUBLIC_URL="https://1d41c778934a555b292d094d17777c61.r2.cloudflarestorage.com/ghanajersey"
@@ -244,6 +302,7 @@ Before going live, verify:
 - MongoDB is reachable from the container
 - `JWT_SECRET_KEY` is set to a strong value
 - payment keys are set if Stripe or Paystack should work in production
+- for Stripe, `STRIPE_API_KEY` is a real secret key and `STRIPE_WEBHOOK_SECRET` matches the `…/api/webhook/stripe` endpoint in the Stripe Dashboard (see [Stripe Payments](#stripe-payments))
 - `RESEND_API_KEY` is set if transactional emails should work in production
 - `RESEND_FROM_EMAIL` is set to a verified Resend sender identity
 - `ADMIN_EMAIL` is set to the address that should receive internal marketplace alerts
