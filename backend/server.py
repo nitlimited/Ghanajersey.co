@@ -696,6 +696,19 @@ async def send_order_paid_notifications(order_id: str) -> None:
     )
 
 
+async def _clear_user_cart(user_id: str) -> None:
+    """Remove the server-side cart for a user. Called when a payment is
+    confirmed (Stripe webhook/status check, Paystack verify) so the cart is
+    only emptied after the user actually pays — not when they merely create
+    the pending order."""
+    if not user_id:
+        return
+    try:
+        await db.carts.delete_one({"user_id": user_id})
+    except Exception as exc:
+        logger.warning(f"Failed to clear cart for user {user_id}: {exc}")
+
+
 async def _mark_transaction_paid(session_id: str):
     transaction = await db.payment_transactions.find_one(
         {"session_id": session_id},
@@ -712,6 +725,11 @@ async def _mark_transaction_paid(session_id: str):
             {"order_id": transaction["order_id"]},
             {"$set": {"payment_status": "paid", "order_status": "processing"}}
         )
+
+        # Cart is cleared only AFTER a successful payment is confirmed.
+        # This is what lets a user cancel on the Stripe/Paystack page and
+        # come back with their items still in the cart.
+        await _clear_user_cart(transaction.get("user_id"))
 
         await send_order_paid_notifications(transaction["order_id"])
 
@@ -910,6 +928,7 @@ class OrderCreate(BaseModel):
     shipping_address: ShippingAddress
     payment_method: str  # stripe, paypal, paystack
     currency: str = "USD"
+    promo_code: Optional[str] = None
 
 class OrderResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -3276,8 +3295,49 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
     else:
         # USD shipping rates
         shipping_cost = 15.0 if order_data.shipping_address.country != "Ghana" else 5.0
-    
-    total = subtotal + shipping_cost
+
+    # Apply promo/discount code if supplied. Server-side re-validation prevents
+    # a client from sending an arbitrary code or stale percentage.
+    discount_code = None
+    discount_percent = 0.0
+    discount_amount = 0.0
+
+    if order_data.promo_code:
+        raw_code = order_data.promo_code.strip().upper()
+        if raw_code:
+            discount = await db.discount_codes.find_one(
+                {"code": raw_code}, {"_id": 0}
+            )
+            if not discount:
+                raise HTTPException(status_code=400, detail="Invalid discount code")
+            if not discount.get("is_active", False):
+                raise HTTPException(status_code=400, detail="Discount code is inactive")
+            if discount.get("current_uses", 0) >= discount.get("max_uses", 0):
+                raise HTTPException(status_code=400, detail="Discount code has reached maximum uses")
+
+            expires_at_raw = discount.get("expires_at")
+            if expires_at_raw:
+                expires_at = datetime.fromisoformat(expires_at_raw)
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at < datetime.now(timezone.utc):
+                    raise HTTPException(status_code=400, detail="Discount code has expired")
+
+            discount_code = raw_code
+            discount_percent = float(discount.get("discount_percent", 0))
+            # Discount applies to the items subtotal only, not shipping.
+            discount_amount = round(subtotal * discount_percent / 100.0, 2)
+
+            # Increment usage count atomically so the code can't be reused
+            # past its max_uses limit even under concurrent checkouts.
+            await db.discount_codes.update_one(
+                {"code": raw_code},
+                {"$inc": {"current_uses": 1}}
+            )
+
+    total = round(subtotal - discount_amount + shipping_cost, 2)
+    if total < 0:
+        total = 0.0
     
     vendor_status = {
         item["vendor_id"]: "order_placed"
@@ -3301,8 +3361,11 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
         "shipping_address": order_data.shipping_address.model_dump(),
         "subtotal": round(subtotal, 2),
         "subtotal_usd": round(subtotal_usd, 2),
+        "discount_code": discount_code,
+        "discount_percent": discount_percent,
+        "discount_amount": discount_amount,
         "shipping_cost": shipping_cost,
-        "total": round(total, 2),
+        "total": total,
         "currency": order_data.currency,
         "payment_method": order_data.payment_method,
         "payment_status": "pending",
@@ -3314,11 +3377,19 @@ async def create_order(order_data: OrderCreate, user: dict = Depends(get_current
     }
     
     await db.orders.insert_one(order_doc)
-    
-    # Clear cart
-    await db.carts.delete_one({"user_id": user["user_id"]})
-    
-    return {"order_id": order_id, "total": total, "currency": order_data.currency}
+
+    # NOTE: We intentionally do NOT clear the cart here. The cart is cleared
+    # only when payment is confirmed (in _mark_transaction_paid for Stripe
+    # and in the Paystack verify endpoint). This way a user who cancels on
+    # the payment provider page returns to their cart with items intact.
+
+    return {
+        "order_id": order_id,
+        "total": total,
+        "currency": order_data.currency,
+        "discount_amount": discount_amount,
+        "discount_code": discount_code,
+    }
 
 @api_router.get("/orders")
 async def get_user_orders(user: dict = Depends(get_current_user)):
@@ -3644,6 +3715,9 @@ async def verify_paystack(reference: str, user: dict = Depends(get_current_user)
                     "paid_at": paid_at
                 }}
             )
+
+            # Clear the cart only now that the payment is confirmed.
+            await _clear_user_cart(transaction.get("user_id"))
 
             await send_order_paid_notifications(transaction["order_id"])
         
@@ -4272,25 +4346,33 @@ async def get_discounts(user: dict = Depends(get_admin_user)):
     return discounts
 
 @api_router.post("/discounts/validate")
-async def validate_discount(code: str, user: dict = Depends(get_current_user)):
+async def validate_discount(code: str):
+    """Validate a discount code. Public endpoint so guests at checkout can
+    apply codes before creating their account."""
+    if not code:
+        raise HTTPException(status_code=400, detail="Code is required")
+
     discount = await db.discount_codes.find_one({"code": code.upper()}, {"_id": 0})
-    
+
     if not discount:
         raise HTTPException(status_code=404, detail="Invalid discount code")
-    
+
     if not discount["is_active"]:
         raise HTTPException(status_code=400, detail="Discount code is inactive")
-    
+
     if discount["current_uses"] >= discount["max_uses"]:
         raise HTTPException(status_code=400, detail="Discount code has reached maximum uses")
-    
+
     expires_at = datetime.fromisoformat(discount["expires_at"])
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Discount code has expired")
-    
-    return {"discount_percent": discount["discount_percent"]}
+
+    return {
+        "code": discount["code"],
+        "discount_percent": discount["discount_percent"],
+    }
 
 # ==================== NEWSLETTER ROUTES ====================
 
